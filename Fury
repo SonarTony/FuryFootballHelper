@@ -1,0 +1,606 @@
+import React, { useMemo, useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Download, Upload, Dice1, RotateCcw, Save, History, Settings, BookOpenText } from "lucide-react";
+import { motion } from "framer-motion";
+
+// ---------------------------
+// Utility: RNG with optional seed (Mulberry32)
+// ---------------------------
+function mulberry32(a) {
+  return function () {
+    var t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function useRNG(seed) {
+  const rng = useMemo(() => {
+    if (!seed) return Math.random;
+    let s = 0;
+    for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0;
+    const r = mulberry32(s || 1);
+    return r;
+  }, [seed]);
+  return rng;
+}
+
+// ---------------------------
+// Default Data (You can edit in the UI)
+// ---------------------------
+const defaultData = {
+  meta: { name: "Sample Fury Football Set", version: 1 },
+  furyDieFaces: ["▲", "●", "●", "●", "■", "■"], // triangle, 3 circles, 2 squares
+  furyEffects: {
+    "▲": "Triangle: Momentum surge (offense +1 to next player check)",
+    "●": "Circle: No special effect",
+    "■": "Square: Wild card — consult FURY chart note"
+  },
+  zoneNames: { white: "White Zone", red: "Red Zone" },
+  offenseCharts: {
+    white: {
+      1: { chart: "react", call: "run", note: "Edge run" },
+      2: { chart: "react", call: "pass", note: "Quick pass" },
+      3: { chart: "fury", call: "run", note: "Jet sweep" },
+      4: { chart: "pass", call: "pass", note: "Play action" },
+      5: { chart: "run", call: "run", note: "Inside power" },
+      6: { chart: "fury", call: "pass", note: "Shot take" }
+    },
+    red: {
+      1: { chart: "react", call: "run", note: "Goal line dive" },
+      2: { chart: "react", call: "pass", note: "Fade/quick out" },
+      3: { chart: "run", call: "run", note: "Trap" },
+      4: { chart: "pass", call: "pass", note: "TE option" },
+      5: { chart: "fury", call: "run", note: "Creative ground" },
+      6: { chart: "fury", call: "pass", note: "Red zone trick" }
+    }
+  },
+  defenseCharts: {
+    white: {
+      1: { note: "Base front" },
+      2: { note: "Light box" },
+      3: { note: "Nickel" },
+      4: { note: "Stunt/Twist" },
+      5: { note: "Blitz" },
+      6: { note: "Heavy front" }
+    },
+    red: {
+      1: { note: "Goal line" },
+      2: { note: "Press shell" },
+      3: { note: "Spy" },
+      4: { note: "Zone match" },
+      5: { note: "Run commit" },
+      6: { note: "Max pressure" }
+    }
+  },
+  playCharts: {
+    react: {
+      13: { pass: "Pass: Tip — check WR hands.", run: "Run: Bounce — check Edge." },
+      14: { pass: "Pass: Check QB under duress.", run: "Run: Cutback lane opens." },
+      15: { pass: "Pass: Hot read success.", run: "Run: Stuffed at LOS." },
+      16: { pass: "Pass: Deep shot contested.", run: "Run: Second effort gains." },
+      17: { pass: "Pass: Check DB ball skills.", run: "Run: Check LB pursuit." },
+      18: { pass: "Pass: PI? — ref check table.", run: "Run: Flag? — holding check." },
+      19: { pass: "Pass: Sideline toe-tap.", run: "Run: Outside burst." },
+      20: { pass: "Pass: Broken play magic.", run: "Run: Breakaway lane." }
+    },
+    fury: {
+      13: { pass: "Pass: Trick forms — consult Fury note.", run: "Run: Misdir confuses front." },
+      14: { pass: "Pass: Lateral option open.", run: "Run: Double handoff wild." },
+      15: { pass: "Pass: Flea flicker look.", run: "Run: Reverse alley." },
+      16: { pass: "Pass: Shuffle pass seam.", run: "Run: Looping orbit." },
+      17: { pass: "Pass: QB scramble throw.", run: "Run: QB keeper crease." },
+      18: { pass: "Pass: Laterals chaos.", run: "Run: Pitch pitch go." },
+      19: { pass: "Pass: Gadget TD chance.", run: "Run: Gadget TD chance." },
+      20: { pass: "Pass: Highlight play.", run: "Run: Highlight play." }
+    },
+    pass: {
+      13: { pass: "Pass: Slant wins.", run: "Run: Audible? If so, check player." },
+      14: { pass: "Pass: Out route timing.", run: "Run: Box stacked — 0 yds." },
+      15: { pass: "Pass: Seam vs zone.", run: "Run: WR screen for 2." },
+      16: { pass: "Pass: Comeback sticks.", run: "Run: Draw for 4." },
+      17: { pass: "Pass: Post explosive.", run: "Run: RPO stuff — check LB." },
+      18: { pass: "Pass: Corner toe-tap.", run: "Run: Jet tap for 6." },
+      19: { pass: "Pass: Check pass rush.", run: "Run: Box light — 7." },
+      20: { pass: "Pass: Perfect ball.", run: "Run: Check hustle TD?" }
+    },
+    run: {
+      13: { pass: "Pass: Check OC rage.", run: "Run: Power for 3." },
+      14: { pass: "Pass: Fans boo.", run: "Run: Zone slice 5." },
+      15: { pass: "Pass: DC smiles.", run: "Run: Counter 7." },
+      16: { pass: "Pass: Audible to post.", run: "Run: Toss 6." },
+      17: { pass: "Pass: Coach fumes.", run: "Run: Trap 2." },
+      18: { pass: "Pass: Crowd puzzled.", run: "Run: Sweep 9." },
+      19: { pass: "Pass: Lucky checkdown.", run: "Run: Break tackle 12." },
+      20: { pass: "Pass: Miracle bomb.", run: "Run: House call!" }
+    }
+  }
+};
+
+const STORAGE_KEY = "fury-football-helper-v1";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultData;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to load state, using defaults.", e);
+    return defaultData;
+  }
+}
+
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+// ---------------------------
+// Dice helpers
+// ---------------------------
+const rollD = (rng, sides) => Math.floor(rng() * sides) + 1;
+const FURY_FACES = ["▲", "●", "●", "●", "■", "■"]; // index 1-6 mapping
+const furyFromIndex = (i, customFaces) => (customFaces?.[i - 1]) || FURY_FACES[i - 1];
+
+// ---------------------------
+// Main App
+// ---------------------------
+export default function App() {
+  const [state, setState] = useState(loadState());
+  const [seed, setSeed] = useState("");
+  const rng = useRNG(seed);
+
+  const [zone, setZone] = useState("white"); // white | red
+  const [history, setHistory] = useState([]);
+
+  // Persist
+  useEffect(() => saveState(state), [state]);
+
+  const zoneLabel = state.zoneNames?.[zone] || (zone === "red" ? "Red Zone" : "White Zone");
+
+  function rollAll() {
+    const d20 = rollD(rng, 20);
+    const black = rollD(rng, 6);
+    const white = rollD(rng, 6);
+    const furyIdx = rollD(rng, 6);
+    const furyFace = furyFromIndex(furyIdx, state.furyDieFaces);
+
+    // Determine offense call from black die
+    const off = state.offenseCharts?.[zone]?.[black];
+    const def = state.defenseCharts?.[zone]?.[white];
+
+    let route = { type: "player", detail: `Check player cards (d20=${d20})` };
+    let playResult = null;
+
+    if (d20 >= 13 && d20 <= 20) {
+      const chartName = off?.chart || "react";
+      const call = off?.call || "run"; // "pass" | "run"
+      const chart = state.playCharts?.[chartName];
+      const row = chart?.[d20];
+      const res = row?.[call];
+      route = { type: "chart", chart: chartName, call, number: d20 };
+      playResult = res || `No entry for ${chartName} ${d20} ${call}.`;
+    }
+
+    const furyEffect = state.furyEffects?.[furyFace] || "No special effect";
+
+    const entry = {
+      ts: Date.now(),
+      zone,
+      d20,
+      black,
+      white,
+      furyIdx,
+      furyFace,
+      offense: off,
+      defense: def,
+      route,
+      result: playResult,
+      furyEffect
+    };
+
+    setHistory((h) => [entry, ...h].slice(0, 50));
+    return entry;
+  }
+
+  function clearHistory() {
+    setHistory([]);
+  }
+
+  function updateJSON(path, value) {
+    // naive deep set for 2-level paths like playCharts, offenseCharts, etc.
+    setState((s) => ({ ...s, [path]: value }));
+  }
+
+  function downloadJSON() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fury-football-${(state?.meta?.name || "dataset").replace(/\s+/g, "-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function uploadJSON(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const obj = JSON.parse(evt.target.result);
+        setState(obj);
+      } catch (err) {
+        alert("Invalid JSON file");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-slate-100 p-4 md:p-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Fury Football – Browser Helper</h1>
+            <p className="text-sm text-slate-600">Roll 1d20, Black d6 (Offense), White d6 (Defense), and Fury d6. d20 of 1–12: check player cards. d20 of 13–20: consult play charts (React, Fury, Pass, Run) with Pass/Run entries.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={downloadJSON} className="gap-2"><Download className="h-4 w-4"/>Export</Button>
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-md border bg-white cursor-pointer shadow-sm"><Upload className="h-4 w-4"/>
+              <span>Import</span>
+              <input type="file" accept="application/json" className="hidden" onChange={uploadJSON} />
+            </label>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Roller */}
+          <Card className="lg:col-span-2 shadow-md">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2"><Dice1 className="h-5 w-5"/> Dice Roller</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="seed" className="text-xs text-slate-500">Seed</Label>
+                  <Input id="seed" placeholder="optional" value={seed} onChange={(e)=>setSeed(e.target.value)} className="h-8 w-40" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-slate-500">Zone</Label>
+                  <Select value={zone} onValueChange={setZone}>
+                    <SelectTrigger className="h-8 w-36">
+                      <SelectValue placeholder="Select zone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="white">{state.zoneNames?.white || "White Zone"}</SelectItem>
+                      <SelectItem value="red">{state.zoneNames?.red || "Red Zone"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <Die faceLabel={`d20`} valuePreview="1–20" />
+                <Die faceLabel={`Black d6`} valuePreview="1–6" sub="Offense"/>
+                <Die faceLabel={`White d6`} valuePreview="1–6" sub="Defense"/>
+                <Die faceLabel={`Fury d6`} valuePreview={state.furyDieFaces?.join(" ")} sub="▲ ● ● ● ■ ■"/>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button size="lg" onClick={rollAll} className="gap-2"><Dice1 className="h-5 w-5"/> Roll</Button>
+                <Button variant="outline" onClick={clearHistory} className="gap-2"><RotateCcw className="h-4 w-4"/>Clear</Button>
+              </div>
+
+              <div className="mt-6">
+                <ResultPanel last={history[0]} zoneLabel={zoneLabel} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Right: History */}
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><History className="h-5 w-5"/> Roll History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 max-h-[560px] overflow-auto pr-2">
+              {history.length === 0 && (
+                <div className="text-sm text-slate-500">No rolls yet.</div>
+              )}
+              {history.map((h) => (
+                <HistoryItem key={h.ts} e={h} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Config Tabs */}
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5"/> Configuration & Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="offense">
+              <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
+                <TabsTrigger value="offense">Offense (Black d6)</TabsTrigger>
+                <TabsTrigger value="defense">Defense (White d6)</TabsTrigger>
+                <TabsTrigger value="charts">Play Charts 13–20</TabsTrigger>
+                <TabsTrigger value="fury">Fury Die & Effects</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="offense" className="mt-4">
+                <TwoZoneGrid
+                  labelLeft="White Zone"
+                  labelRight="Red Zone"
+                  dataLeft={state.offenseCharts?.white}
+                  dataRight={state.offenseCharts?.red}
+                  onChangeLeft={(v)=>updateJSON("offenseCharts", { ...state.offenseCharts, white: v })}
+                  onChangeRight={(v)=>updateJSON("offenseCharts", { ...state.offenseCharts, red: v })}
+                  renderCell={(val, setVal)=> (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Select value={val?.chart || "react"} onValueChange={(x)=>setVal({ ...val, chart: x })}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(state.playCharts || {}).map((k)=>(<SelectItem key={k} value={k}>{k}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={val?.call || "run"} onValueChange={(x)=>setVal({ ...val, call: x })}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="run">run</SelectItem>
+                            <SelectItem value="pass">pass</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Input placeholder="note (optional)" value={val?.note || ""} onChange={(e)=>setVal({ ...val, note: e.target.value })} />
+                    </div>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value="defense" className="mt-4">
+                <TwoZoneGrid
+                  labelLeft="White Zone"
+                  labelRight="Red Zone"
+                  dataLeft={state.defenseCharts?.white}
+                  dataRight={state.defenseCharts?.red}
+                  onChangeLeft={(v)=>updateJSON("defenseCharts", { ...state.defenseCharts, white: v })}
+                  onChangeRight={(v)=>updateJSON("defenseCharts", { ...state.defenseCharts, red: v })}
+                  renderCell={(val, setVal)=> (
+                    <div className="space-y-2">
+                      <Input placeholder="defense note / modifier" value={val?.note || ""} onChange={(e)=>setVal({ ...val, note: e.target.value })} />
+                    </div>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value="charts" className="mt-4 space-y-6">
+                <ChartEditor
+                  title="React Chart"
+                  value={state.playCharts?.react}
+                  onChange={(v)=>updateJSON("playCharts", { ...state.playCharts, react: v })}
+                />
+                <ChartEditor
+                  title="Fury Chart"
+                  value={state.playCharts?.fury}
+                  onChange={(v)=>updateJSON("playCharts", { ...state.playCharts, fury: v })}
+                />
+                <ChartEditor
+                  title="Pass Chart"
+                  value={state.playCharts?.pass}
+                  onChange={(v)=>updateJSON("playCharts", { ...state.playCharts, pass: v })}
+                />
+                <ChartEditor
+                  title="Run Chart"
+                  value={state.playCharts?.run}
+                  onChange={(v)=>updateJSON("playCharts", { ...state.playCharts, run: v })}
+                />
+              </TabsContent>
+
+              <TabsContent value="fury" className="mt-4 space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><BookOpenText className="h-5 w-5"/> Fury Die Faces</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                      {state.furyDieFaces?.map((face, idx)=> (
+                        <Input key={idx} value={face} onChange={(e)=>{
+                          const arr = [...state.furyDieFaces];
+                          arr[idx] = e.target.value || "";
+                          updateJSON("furyDieFaces", arr);
+                        }} />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {Array.from(new Set(state.furyDieFaces)).map((sym) => (
+                        <div key={sym} className="space-y-2">
+                          <Label>{sym || "(blank)"}</Label>
+                          <Textarea value={state.furyEffects?.[sym] || ""} onChange={(e)=>{
+                            updateJSON("furyEffects", { ...state.furyEffects, [sym]: e.target.value });
+                          }} />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Die({ faceLabel, valuePreview, sub }) {
+  return (
+    <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="text-xs text-slate-500">{faceLabel}</div>
+      <div className="text-xl md:text-2xl font-semibold">{valuePreview}</div>
+      {sub && <div className="text-xs text-slate-400">{sub}</div>}
+    </motion.div>
+  );
+}
+
+function ResultPanel({ last, zoneLabel }) {
+  if (!last) return (
+    <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Roll to see results. d20 1–12 checks player cards; d20 13–20 consults a play chart based on the offense (black d6) mapping.</div>
+  );
+
+  return (
+    <div className="rounded-2xl border bg-white p-4 md:p-6 shadow-sm space-y-3">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <Badge>Zone: {zoneLabel}</Badge>
+        <Badge>d20: {last.d20}</Badge>
+        <Badge>Black d6 (Off): {last.black}</Badge>
+        <Badge>White d6 (Def): {last.white}</Badge>
+        <Badge>Fury: {last.furyFace}</Badge>
+      </div>
+      <div className="text-slate-700">
+        {last.route.type === "player" ? (
+          <p><b>Route:</b> Player Card Check — use {last.route.detail}.</p>
+        ) : (
+          <p><b>Route:</b> Chart <b>{last.route.chart}</b> • #{last.route.number} • <b>{last.route.call.toUpperCase()}</b></p>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <InfoBox title="Offense Call" body={last.offense ? (
+          <>
+            <div>Chart: <b>{last.offense.chart}</b></div>
+            <div>Call: <b>{last.offense.call.toUpperCase()}</b></div>
+            {last.offense.note && <div className="text-slate-500 text-sm">{last.offense.note}</div>}
+          </>
+        ) : <i>Not set</i>} />
+        <InfoBox title="Defense" body={last.defense ? (
+          <>
+            {last.defense.note && <div className="text-slate-700">{last.defense.note}</div>}
+          </>
+        ) : <i>Not set</i>} />
+        <InfoBox title="Fury Effect" body={<div>{last.furyEffect}</div>} />
+      </div>
+      {last.result && (
+        <div className="rounded-xl border p-3 bg-slate-50">
+          <div className="text-xs font-semibold text-slate-500">Chart Result</div>
+          <div className="text-slate-800">{last.result}</div>
+        </div>
+      )}
+      <div className="text-xs text-slate-500">Tip: You can fully customize charts, faces, and zone mappings below — data auto-saves to your browser.</div>
+    </div>
+  );
+}
+
+function InfoBox({ title, body }) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="text-xs font-semibold text-slate-500">{title}</div>
+      <div className="mt-1 text-slate-800">{body}</div>
+    </div>
+  );
+}
+
+function Badge({ children }) {
+  return (
+    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs bg-white shadow-sm">{children}</span>
+  );
+}
+
+function TwoZoneGrid({ labelLeft, labelRight, dataLeft = {}, dataRight = {}, onChangeLeft, onChangeRight, renderCell }) {
+  const [left, setLeft] = useState(dataLeft);
+  const [right, setRight] = useState(dataRight);
+
+  useEffect(()=>setLeft(dataLeft), [dataLeft]);
+  useEffect(()=>setRight(dataRight), [dataRight]);
+
+  useEffect(()=>{ onChangeLeft?.(left); }, [left]);
+  useEffect(()=>{ onChangeRight?.(right); }, [right]);
+
+  function setCell(side, i, v) {
+    if (side === "L") setLeft((s)=> ({ ...s, [i]: v }));
+    else setRight((s)=> ({ ...s, [i]: v }));
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <div className="mb-2 text-sm font-semibold text-slate-600">{labelLeft}</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[1,2,3,4,5,6].map((i)=> (
+            <div key={i} className="rounded-xl border bg-white p-3 space-y-2">
+              <div className="text-xs font-semibold text-slate-500">Black/White = {i}</div>
+              {renderCell(left?.[i] || {}, (v)=>setCell("L", i, v))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 text-sm font-semibold text-slate-600">{labelRight}</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[1,2,3,4,5,6].map((i)=> (
+            <div key={i} className="rounded-xl border bg-white p-3 space-y-2">
+              <div className="text-xs font-semibold text-slate-500">Black/White = {i}</div>
+              {renderCell(right?.[i] || {}, (v)=>setCell("R", i, v))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChartEditor({ title, value = {}, onChange }) {
+  const [rows, setRows] = useState(()=> {
+    // ensure keys 13..20
+    const base = {};
+    for (let i = 13; i <= 20; i++) base[i] = value?.[i] || { pass: "", run: "" };
+    return base;
+  });
+
+  useEffect(()=>{
+    const base = {};
+    for (let i = 13; i <= 20; i++) base[i] = value?.[i] || { pass: "", run: "" };
+    setRows(base);
+  }, [value]);
+
+  useEffect(()=>{
+    onChange?.(rows);
+  }, [rows]);
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="grid grid-cols-1 md:grid-cols-8 border-t">
+          <div className="hidden md:block col-span-1 bg-slate-50 p-3 text-xs font-semibold">#</div>
+          <div className="col-span-4 md:col-span-3 bg-slate-50 p-3 text-xs font-semibold">Pass</div>
+          <div className="col-span-4 md:col-span-4 bg-slate-50 p-3 text-xs font-semibold">Run</div>
+        </div>
+        {Array.from({ length: 8 }).map((_, idx)=> {
+          const n = 13 + idx;
+          return (
+            <div key={n} className="grid grid-cols-1 md:grid-cols-8 border-t">
+              <div className="hidden md:flex items-center justify-center col-span-1 p-3 text-sm font-semibold">{n}</div>
+              <div className="col-span-4 md:col-span-3 p-2">
+                <Textarea value={rows[n]?.pass || ""} onChange={(e)=> setRows((s)=> ({ ...s, [n]: { ...s[n], pass: e.target.value } }))} />
+              </div>
+              <div className="col-span-4 md:col-span-4 p-2">
+                <Textarea value={rows[n]?.run || ""} onChange={(e)=> setRows((s)=> ({ ...s, [n]: { ...s[n], run: e.target.value } }))} />
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
