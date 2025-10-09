@@ -50,8 +50,9 @@
   .chartTable th,.chartTable td{border-top:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
   .chartTable th{background:#f1f5f9;font-size:.75rem}
   .muted{color:var(--muted)}
-  .tip{font-size:.75rem;color:var(--muted)}
+  .tip{font-size:.75rem;color:#9aa1ad}
   .rowGap{display:grid;gap:24px}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.86rem}
 </style>
 </head>
 <body>
@@ -94,6 +95,13 @@
             <div class="die"><div class="lbl">Black d6</div><div class="val">1–6</div><div class="sub">Offense</div></div>
             <div class="die"><div class="lbl">White d6</div><div class="val">1–6</div><div class="sub">Defense</div></div>
             <div class="die"><div class="lbl">Fury d6</div><div class="val" id="furyFacesPreview">▲ ● ● ● ■ ■</div><div class="sub">customizable</div></div>
+          </div>
+
+          <!-- Extra yardage dice -->
+          <div class="grid grid-3" style="margin-top:12px;">
+            <div class="die"><div class="lbl">Short</div><div class="val" id="shortVal">1d6</div><div class="sub">extra roll</div></div>
+            <div class="die"><div class="lbl">Medium</div><div class="val" id="mediumVal">2d6</div><div class="sub mono" id="mediumBreak"></div></div>
+            <div class="die"><div class="lbl">Long</div><div class="val" id="longVal">3d6</div><div class="sub mono" id="longBreak"></div></div>
           </div>
 
           <div class="controls" style="margin-top:12px;">
@@ -179,10 +187,10 @@
 /* =======================
    Persistent State + Defaults
    ======================= */
-const STORAGE_KEY = 'fury-football-helper-v4-html';
+const STORAGE_KEY = 'fury-football-helper-v7-html';
 
 const defaultData = {
-  meta: { name: "Fury Football Set (Defense picks chart; Gotcha = LOD)", version: 4 },
+  meta: { name: "Fury Football Set (Defense picks chart; Gotcha = LOD)", version: 7 },
   furyDieFaces: ["▲","●","●","●","■","■"],
   furyEffects: {
     "▲": "Triangle: Momentum surge (offense +1 to next player check)",
@@ -209,40 +217,48 @@ const defaultData = {
     }
   },
 
-  /* Play charts 13–20 (each row has pass/run text) */
+  /* ===== YOUR CUSTOM PLAY CHARTS (13–20) ===== */
   playCharts: {
-    react: { 13:{pass:"Pass: Defensive Player [1]", run:"Run: Defensive Player [4]"},
-             14:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
-             15:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
-             16:{pass:"Pass: Defensive Player [3]", run:"Run: Defensive Player [6]"},
-             17:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
-             18:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
-             19:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
-             20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}},
-    fury:  { 13:{pass:"Pass: SACK! (-1D6 LOSS)", run:"Run: FUMBLE!"},
-             14:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
-             15:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
-             16:{pass:"Pass: Defensive Player [5]", run:"Run: Defensive Player [2]"},
-             17:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
-             18:{pass:"Pass: SACK (-1D6)", run:"Run: LOSS (-1D6)"},
-             19:{pass:"Pass: FUMBLE", run:"Run: LONG GAIN (3D6)"},
-             20:{pass:"Pass: Offensive Player [12]", run:"Offensive Player [12]"}},
-    pass:  { 13:{pass:"Pass: INTERCEPTION!", run:"Run: TOUCHDOWN!"},
-             14:{pass:"Pass: INTERCEPTION!", run:"Run: SHORT GAIN (1D6)"},
-             15:{pass:"Pass: INCOMPLETE!", run:"Run: MEDIUM GAIN (2D6)"},
-             16:{pass:"Pass: INCOMPLETE!", run:"Run: Offensive Player [12]"},
-             17:{pass:"Pass: INTERCEPTION!", run:"Run: LONG GAIN (3D6)"},
-             18:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
-             19:{pass:"Pass: INCOMPLETE!", run:"Run: LONG GAIN (3D6)"},
-             20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}},
-    run:   { 13:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
-             14:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LONG GAIN (3D6)"},
-             15:{pass:"Pass: SHORT GAIN (1D6)", run:"Run: NO GAIN."},
-             16:{pass:"Pass: Offensive Player [12]", run:"Run: Defensive Player [5]"},
-             17:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
-             18:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: LOSS (-1D6)"},
-             19:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: SHORT GAIN (1D6)"},
-             20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"} }
+    react: {
+      13:{pass:"Pass: Defensive Player [1]", run:"Run: Defensive Player [4]"},
+      14:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
+      15:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
+      16:{pass:"Pass: Defensive Player [3]", run:"Run: Defensive Player [6]"},
+      17:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      18:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      19:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    },
+    fury:  {
+      13:{pass:"Pass: SACK! (-1D6 LOSS)", run:"Run: FUMBLE!"},
+      14:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
+      15:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
+      16:{pass:"Pass: Defensive Player [5]", run:"Run: Defensive Player [2]"},
+      17:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
+      18:{pass:"Pass: SACK (-1D6)", run:"Run: LOSS (-1D6)"},
+      19:{pass:"Pass: FUMBLE", run:"Run: LONG GAIN (3D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Offensive Player [12]"}
+    },
+    pass:  {
+      13:{pass:"Pass: INTERCEPTION!", run:"Run: TOUCHDOWN!"},
+      14:{pass:"Pass: INTERCEPTION!", run:"Run: SHORT GAIN (1D6)"},
+      15:{pass:"Pass: INCOMPLETE!", run:"Run: MEDIUM GAIN (2D6)"},
+      16:{pass:"Pass: INCOMPLETE!", run:"Run: Offensive Player [12]"},
+      17:{pass:"Pass: INTERCEPTION!", run:"Run: LONG GAIN (3D6)"},
+      18:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
+      19:{pass:"Pass: INCOMPLETE!", run:"Run: LONG GAIN (3D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    },
+    run:   {
+      13:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
+      14:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LONG GAIN (3D6)"},
+      15:{pass:"Pass: SHORT GAIN (1D6)", run:"Run: NO GAIN."},
+      16:{pass:"Pass: Offensive Player [12]", run:"Run: Defensive Player [5]"},
+      17:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
+      18:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: LOSS (-1D6)"},
+      19:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: SHORT GAIN (1D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    }
   }
 };
 
@@ -267,6 +283,10 @@ function renderAll(){
   renderResultPanel(null); renderHistory(); renderOffenseGrid(); renderDefenseGrid(); renderCharts(); renderFuryEditors();
   $all('.tabButtons .btn').forEach(b=>{ b.onclick=()=>switchTab(b.dataset.tab) }); switchTab(currentTab);
   const zoneSel=$('#zone'); zoneSel.options[0].text=State.zoneNames?.white||'White Zone'; zoneSel.options[1].text=State.zoneNames?.red||'Red Zone';
+  // reset extra dice previews
+  $('#shortVal').textContent='1d6';
+  $('#mediumVal').textContent='2d6'; $('#mediumBreak').textContent='';
+  $('#longVal').textContent='3d6'; $('#longBreak').textContent='';
 }
 function renderResultPanel(last){
   const panel=$('#resultPanel');
@@ -291,6 +311,13 @@ function renderResultPanel(last){
       <span class="badge">Black d6 (Off): ${last.black} → ${(last.offense?.call||'?').toUpperCase()}</span>
       <span class="badge">White d6 (Def): ${last.white} → ${(last.defense?.choice||'?').toUpperCase()}</span>
       <span class="badge">Fury: ${last.furyFace}</span>
+      <span class="badge">Short: ${last.shortD6}</span>
+      <span class="badge">Medium: ${last.medium2D6.total}</span>
+      <span class="badge">Long: ${last.long3D6.total}</span>
+    </div>
+    <div class="mono" style="margin:-6px 0 8px 0; color:#475569;">
+      <span>Medium rolls: [${last.medium2D6.rolls.join(', ')}]</span> •
+      <span>Long rolls: [${last.long3D6.rolls.join(', ')}]</span>
     </div>
     <div style="margin-bottom:8px;">${routeHTML}</div>
     <div class="grid grid-3">
@@ -316,10 +343,16 @@ function renderHistory(){
         <span class="badge">Off ${h.black}→${(h.offense?.call||'').toUpperCase()}</span>
         <span class="badge">Def ${h.white}→${(h.defense?.choice||'').toUpperCase()}</span>
         <span class="badge">Fury ${h.furyFace}</span>
+        <span class="badge">Short ${h.shortD6}</span>
+        <span class="badge">Medium ${h.medium2D6.total}</span>
+        <span class="badge">Long ${h.long3D6.total}</span>
         <span class="badge">${h.zone}</span>
         ${h.route.type==='gotcha'?'<span class="badge">Gotcha! LOD</span>':''}
       </div>
-      <div style="margin-top:6px;font-size:.9rem;">
+      <div class="mono" style="margin:4px 0 4px 0; color:#475569;">
+        Medium: [${h.medium2D6.rolls.join(', ')}] • Long: [${h.long3D6.rolls.join(', ')}]
+      </div>
+      <div style="font-size:.9rem;">
         ${
           h.route.type==='player' ? 'Player card check.'
           : h.route.type==='gotcha' ? 'Loss of down.'
@@ -446,8 +479,20 @@ function rollAll(){
   const zone=$('#zone').value;
   const rng=seedToRng($('#seed').value.trim());
   const d20=rollD(rng,20), black=rollD(rng,6), white=rollD(rng,6), furyIdx=rollD(rng,6);
-  const furyFace=(State.furyDieFaces&&State.furyDieFaces[furyIdx-1])||["▲","●","●","●","■","■"][furyIdx-1];
 
+  // Extra dice
+  const shortD6 = rollD(rng,6);
+  const m1 = rollD(rng,6), m2 = rollD(rng,6);
+  const l1 = rollD(rng,6), l2 = rollD(rng,6), l3 = rollD(rng,6);
+
+  // Update previews
+  $('#shortVal').textContent = shortD6;
+  $('#mediumVal').textContent = (m1+m2);
+  $('#mediumBreak').textContent = `[${m1}, ${m2}]`;
+  $('#longVal').textContent = (l1+l2+l3);
+  $('#longBreak').textContent = `[${l1}, ${l2}, ${l3}]`;
+
+  const furyFace=(State.furyDieFaces&&State.furyDieFaces[furyIdx-1])||["▲","●","●","●","■","■"][furyIdx-1];
   const off=State.offenseCharts?.[zone]?.[black];
   const def=State.defenseCharts?.[zone]?.[white];
 
@@ -463,9 +508,8 @@ function rollAll(){
       playResult='Gotcha! Automatic loss of down.';
     } else {
       // Defense selects the chart
-      const chartName = defChoice; // 'react' | 'pass' | 'run' | 'fury'
+      const chartName = defChoice; // 'react'|'pass'|'run'|'fury'
       const row = State.playCharts?.[chartName]?.[d20] || {};
-
       if(offCall==='audible'){
         const passTxt=row.pass||'(no pass entry)';
         const runTxt =row.run ||'(no run entry)';
@@ -485,7 +529,13 @@ function rollAll(){
 
   const furyEffect=(State.furyEffects&&State.furyEffects[furyFace])||'No special effect';
 
-  const entry={ts:Date.now(),zone,d20,black,white,furyIdx,furyFace,offense:off,defense:def,route,result:playResult,furyEffect};
+  const entry={
+    ts:Date.now(), zone, d20, black, white, furyIdx, furyFace,
+    offense:off, defense:def, route, result:playResult, furyEffect,
+    shortD6,
+    medium2D6: { total: m1+m2, rolls: [m1,m2] },
+    long3D6:   { total: l1+l2+l3, rolls: [l1,l2,l3] }
+  };
   History.unshift(entry); History=History.slice(0,60);
   renderResultPanel(entry); renderHistory();
 }
@@ -498,7 +548,12 @@ function importJSON(file){ const r=new FileReader(); r.onload=e=>{ try{ const ob
 window.addEventListener('DOMContentLoaded', ()=>{
   renderAll();
   $('#btnRoll').onclick=rollAll;
-  $('#btnClear').onclick=()=>{History=[];renderHistory();renderResultPanel(null);}
+  $('#btnClear').onclick=()=>{History=[];renderHistory();renderResultPanel(null);
+    // also clear the extra dice previews
+    $('#shortVal').textContent='1d6';
+    $('#mediumVal').textContent='2d6'; $('#mediumBreak').textContent='';
+    $('#longVal').textContent='3d6'; $('#longBreak').textContent='';
+  };
   $('#btnExport').onclick=exportJSON;
   $('#fileImport').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) importJSON(f); e.target.value=''; };
 });
