@@ -53,6 +53,10 @@
   .tip{font-size:.75rem;color:#9aa1ad}
   .rowGap{display:grid;gap:24px}
   .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.86rem}
+  .seg{display:flex;gap:6px;align-items:center;background:#fff;border:1px solid var(--line);padding:4px;border-radius:10px}
+  .seg input{display:none}
+  .seg label{padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.85rem}
+  .seg input:checked + label{background:#111827;color:#fff}
 </style>
 </head>
 <body>
@@ -60,7 +64,7 @@
     <header>
       <div>
         <h1>Fury Football – Browser Helper</h1>
-        <p class="sub">1d20 + black d6 (Off: Audible/Run/Pass) + white d6 (Def: Gotcha!/React/Pass/Run/Fury) + Fury d6. 1–12: player cards. 13–20: defense selects the chart; Gotcha! = loss of down.</p>
+        <p class="sub">Defense selects chart on 13–20 (React/Pass/Run/Fury). <b>Gotcha!</b> = automatic loss of down.</p>
       </div>
       <div class="controls">
         <button id="btnExport" class="btn outline">Export JSON</button>
@@ -75,7 +79,7 @@
       <div class="card">
         <div class="hd">
           <h2>Dice Roller</h2>
-          <div class="controls">
+          <div class="controls" style="flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:6px;">
               <span class="muted" style="font-size:.8rem;">Seed</span>
               <input id="seed" class="input" placeholder="optional" style="width:160px;" />
@@ -87,13 +91,20 @@
                 <option value="red">Red Zone</option>
               </select>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="muted" style="font-size:.8rem;">Possession</span>
+              <div class="seg" id="posseg">
+                <input type="radio" name="pos" id="posHome" value="home" checked><label for="posHome">Home</label>
+                <input type="radio" name="pos" id="posAway" value="away"><label for="posAway">Visitor</label>
+              </div>
+            </div>
           </div>
         </div>
         <div class="bd">
           <div class="grid grid-4">
             <div class="die"><div class="lbl">d20</div><div class="val">1–20</div></div>
-            <div class="die"><div class="lbl">Black d6</div><div class="val">1–6</div><div class="sub">Offense</div></div>
-            <div class="die"><div class="lbl">White d6</div><div class="val">1–6</div><div class="sub">Defense</div></div>
+            <div class="die"><div class="lbl">Black d6 (Off)</div><div class="val">1–6</div><div class="sub" id="offTeamTag">Home Offense</div></div>
+            <div class="die"><div class="lbl">White d6 (Def)</div><div class="val">1–6</div><div class="sub" id="defTeamTag">Visitor Defense</div></div>
             <div class="die"><div class="lbl">Fury d6</div><div class="val" id="furyFacesPreview">▲ ● ● ● ■ ■</div><div class="sub">customizable</div></div>
           </div>
 
@@ -110,7 +121,7 @@
           </div>
 
           <div id="resultPanel" style="margin-top:16px;">
-            <div class="tip">Roll to see results. For 13–20, defense chooses the chart (React/Pass/Run/Fury). Gotcha! = automatic loss of down.</div>
+            <div class="tip">Roll to see results. Defense picks the chart on 13–20; <b>Gotcha!</b> is an automatic loss of down in any zone.</div>
           </div>
         </div>
       </div>
@@ -127,14 +138,20 @@
       <div class="hd"><h2>Configuration & Data</h2></div>
       <div class="bd tabs">
         <div class="tabButtons">
-          <button class="btn" data-tab="offense">Offense (Black d6)</button>
-          <button class="btn" data-tab="defense">Defense (White d6)</button>
+          <button class="btn" data-tab="offense">Offense Dice</button>
+          <button class="btn" data-tab="defense">Defense Dice</button>
           <button class="btn" data-tab="charts">Play Charts 13–20</button>
           <button class="btn" data-tab="fury">Fury Die & Effects</button>
         </div>
 
         <!-- Offense -->
         <div class="tab" id="tab-offense">
+          <div class="controls" style="margin-bottom:10px;">
+            <div class="seg">
+              <input type="radio" name="offTeam" id="offTeamHome" value="home" checked><label for="offTeamHome">Home Offense</label>
+              <input type="radio" name="offTeam" id="offTeamAway" value="away"><label for="offTeamAway">Visitor Offense</label>
+            </div>
+          </div>
           <div class="zoneGrid">
             <div class="zoneCol">
               <div class="ttl">White Zone</div>
@@ -149,6 +166,12 @@
 
         <!-- Defense -->
         <div class="tab" id="tab-defense" style="display:none;">
+          <div class="controls" style="margin-bottom:10px;">
+            <div class="seg">
+              <input type="radio" name="defTeam" id="defTeamHome" value="home" checked><label for="defTeamHome">Home Defense</label>
+              <input type="radio" name="defTeam" id="defTeamAway" value="away"><label for="defTeamAway">Visitor Defense</label>
+            </div>
+          </div>
           <div class="zoneGrid">
             <div class="zoneCol">
               <div class="ttl">White Zone</div>
@@ -187,10 +210,25 @@
 /* =======================
    Persistent State + Defaults
    ======================= */
-const STORAGE_KEY = 'fury-football-helper-v7-html';
+const STORAGE_KEY = 'fury-football-helper-v8-html';
+
+const defaultDieOffense = {
+  white: { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} },
+  red:   { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} }
+};
+const defaultDieDefense = {
+  white: {
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+  },
+  red: {
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+  }
+};
 
 const defaultData = {
-  meta: { name: "Fury Football Set (Defense picks chart; Gotcha = LOD)", version: 7 },
+  meta: { name: "Fury Football Set (Defense picks chart; Gotcha = LOD)", version: 8 },
   furyDieFaces: ["▲","●","●","●","■","■"],
   furyEffects: {
     "▲": "Triangle: Momentum surge (offense +1 to next player check)",
@@ -199,22 +237,10 @@ const defaultData = {
   },
   zoneNames: { white: "White Zone", red: "Red Zone" },
 
-  /* Black d6 → Offense: 'audible' | 'run' | 'pass' */
-  offenseCharts: {
-    white: { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} },
-    red:   { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} }
-  },
-
-  /* White d6 → Defense: 'gotcha' | 'react' | 'pass' | 'run' | 'fury' */
-  defenseCharts: {
-    white: {
-      1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
-      4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
-    },
-    red: {
-      1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
-      4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
-    }
+  /* Team-specific dice */
+  teams: {
+    home: { offenseCharts: structuredClone(defaultDieOffense), defenseCharts: structuredClone(defaultDieDefense) },
+    away: { offenseCharts: structuredClone(defaultDieOffense), defenseCharts: structuredClone(defaultDieDefense) }
   },
 
   /* ===== YOUR CUSTOM PLAY CHARTS (13–20) ===== */
@@ -274,30 +300,48 @@ const rollD=(rng,s)=>Math.floor(rng()*s)+1;
 let State = loadState();
 let History = [];
 let currentTab = 'offense';
+let editOffTeam = 'home';
+let editDefTeam = 'home';
 function $(q){return document.querySelector(q)}
 function $all(q){return Array.from(document.querySelectorAll(q))}
 
 /* UI */
 function renderAll(){
   $('#furyFacesPreview').textContent=(State.furyDieFaces||[]).join(' ');
+  updateTeamBadges();
   renderResultPanel(null); renderHistory(); renderOffenseGrid(); renderDefenseGrid(); renderCharts(); renderFuryEditors();
   $all('.tabButtons .btn').forEach(b=>{ b.onclick=()=>switchTab(b.dataset.tab) }); switchTab(currentTab);
-  const zoneSel=$('#zone'); zoneSel.options[0].text=State.zoneNames?.white||'White Zone'; zoneSel.options[1].text=State.zoneNames?.red||'Red Zone';
+
+  // Team toggles in config
+  $all('input[name="offTeam"]').forEach(r=>r.onchange=()=>{ editOffTeam=document.querySelector('input[name="offTeam"]:checked').value; renderOffenseGrid(); });
+  $all('input[name="defTeam"]').forEach(r=>r.onchange=()=>{ editDefTeam=document.querySelector('input[name="defTeam"]:checked').value; renderDefenseGrid(); });
+
+  // Possession toggle
+  $all('input[name="pos"]').forEach(r=>r.onchange=updateTeamBadges);
+
   // reset extra dice previews
   $('#shortVal').textContent='1d6';
   $('#mediumVal').textContent='2d6'; $('#mediumBreak').textContent='';
   $('#longVal').textContent='3d6'; $('#longBreak').textContent='';
 }
+function updateTeamBadges(){
+  const pos = document.querySelector('input[name="pos"]:checked').value; // home|away
+  const offTeam = pos; const defTeam = pos==='home'?'away':'home';
+  $('#offTeamTag').textContent = (offTeam==='home'?'Home':'Visitor')+' Offense';
+  $('#defTeamTag').textContent = (defTeam==='home'?'Home':'Visitor')+' Defense';
+}
 function renderResultPanel(last){
   const panel=$('#resultPanel');
-  if(!last){ panel.innerHTML='<div class="tip">Roll to see results. For 13–20, defense picks the chart (React/Pass/Run/Fury). Gotcha! = loss of down.</div>'; return; }
+  if(!last){ panel.innerHTML='<div class="tip">Roll to see results. Defense picks the chart on 13–20; <b>Gotcha!</b> is an automatic loss of down in any zone.</div>'; return; }
   const zoneLabel=State.zoneNames?.[last.zone]||(last.zone==='red'?'Red Zone':'White Zone');
+  const offTeamLbl = last.offTeam==='home'?'Home Offense':'Visitor Offense';
+  const defTeamLbl = last.defTeam==='home'?'Home Defense':'Visitor Defense';
 
   let routeHTML='';
   if(last.route.type==='player'){
     routeHTML=`<p><b>Route:</b> Player Card Check — use d20=${last.route.number}.</p>`;
   }else if(last.route.type==='gotcha'){
-    routeHTML=`<p><b>Route:</b> <span class="badge">Gotcha! — Loss of Down</span></p>`;
+    routeHTML=`<p><b>Route:</b> <span class="badge">Gotcha! — Automatic loss of down</span></p>`;
   }else if(last.route.type==='chart-single'){
     routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b></p>`;
   }else if(last.route.type==='chart-both'){
@@ -307,9 +351,10 @@ function renderResultPanel(last){
   panel.innerHTML=`
     <div class="grid grid-4" style="gap:8px;margin-bottom:8px;">
       <span class="badge">Zone: ${zoneLabel}</span>
+      <span class="badge">Possession: ${(last.offTeam==='home'?'Home':'Visitor')}</span>
       <span class="badge">d20: ${last.d20}</span>
-      <span class="badge">Black d6 (Off): ${last.black} → ${(last.offense?.call||'?').toUpperCase()}</span>
-      <span class="badge">White d6 (Def): ${last.white} → ${(last.defense?.choice||'?').toUpperCase()}</span>
+      <span class="badge">Off die (${offTeamLbl}): ${last.black} → ${(last.offense?.call||'?').toUpperCase()}</span>
+      <span class="badge">Def die (${defTeamLbl}): ${last.white} → ${(last.defense?.choice||'?').toUpperCase()}</span>
       <span class="badge">Fury: ${last.furyFace}</span>
       <span class="badge">Short: ${last.shortD6}</span>
       <span class="badge">Medium: ${last.medium2D6.total}</span>
@@ -330,7 +375,7 @@ function renderResultPanel(last){
       <div class="ibox"><div class="t">Fury Effect</div><div>${last.furyEffect||'No special effect'}</div></div>
     </div>
     ${last.result?`<div class="result" style="margin-top:8px;"><div class="t" style="font-weight:700;">Result</div><div>${last.result}</div></div>`:''}
-    <div class="tip" style="margin-top:6px;">Tip: Customize mappings below — data auto-saves to your browser.</div>
+    <div class="tip" style="margin-top:6px;">Tip: Customize team dice below — everything auto-saves.</div>
   `;
 }
 function renderHistory(){
@@ -339,6 +384,7 @@ function renderHistory(){
   box.innerHTML=History.map(h=>`
     <div class="histItem">
       <div class="histRow">
+        <span class="badge">${h.offTeam==='home'?'Home':'Visitor'} ball</span>
         <span class="badge">d20 ${h.d20}</span>
         <span class="badge">Off ${h.black}→${(h.offense?.call||'').toUpperCase()}</span>
         <span class="badge">Def ${h.white}→${(h.defense?.choice||'').toUpperCase()}</span>
@@ -364,50 +410,68 @@ function renderHistory(){
     </div>
   `).join('');
 }
+
+/* Offense/Defense editors */
 function renderOffenseGrid(){
+  const team=editOffTeam;
   const CALLS=['audible','run','pass'];
   const makeCell=(zone,i)=>{
-    const val=State.offenseCharts?.[zone]?.[i]||{call:'audible',note:''};
+    const val=State.teams?.[team]?.offenseCharts?.[zone]?.[i]||{call:'audible',note:''};
     return `
       <div class="cell">
-        <div class="k">Black d6 = ${i}</div>
-        <select data-off-${zone}-${i}-call class="input">
+        <div class="k">${team==='home'?'Home':'Visitor'} • Black d6 = ${i} (${zone} zone)</div>
+        <select data-off-${team}-${zone}-${i}-call class="input">
           ${CALLS.map(c=>`<option value="${c}" ${val.call===c?'selected':''}>${c}</option>`).join('')}
         </select>
-        <div style="margin-top:6px;"><input data-off-${zone}-${i}-note class="input" placeholder="note (optional)" value="${val.note||''}"></div>
+        <div style="margin-top:6px;"><input data-off-${team}-${zone}-${i}-note class="input" placeholder="note (optional)" value="${val.note||''}"></div>
       </div>`;
   };
   $('#off-white').innerHTML=[1,2,3,4,5,6].map(i=>makeCell('white',i)).join('');
   $('#off-red').innerHTML  =[1,2,3,4,5,6].map(i=>makeCell('red',i)).join('');
   ['white','red'].forEach(zone=>{
     [1,2,3,4,5,6].forEach(i=>{
-      $(`select[data-off-${zone}-${i}-call]`).onchange=e=>{ ensure(State.offenseCharts[zone],i); State.offenseCharts[zone][i].call=e.target.value; saveState(); };
-      $(`input[data-off-${zone}-${i}-note]`).oninput=e=>{ ensure(State.offenseCharts[zone],i); State.offenseCharts[zone][i].note=e.target.value; saveState(); if(History[0]) renderResultPanel(History[0]); };
+      $(`select[data-off-${team}-${zone}-${i}-call]`).onchange=e=>{
+        ensure(State.teams[team].offenseCharts[zone],i);
+        State.teams[team].offenseCharts[zone][i].call=e.target.value; saveState();
+      };
+      $(`input[data-off-${team}-${zone}-${i}-note]`).oninput=e=>{
+        ensure(State.teams[team].offenseCharts[zone],i);
+        State.teams[team].offenseCharts[zone][i].note=e.target.value; saveState();
+      };
     });
   });
 }
 function renderDefenseGrid(){
+  const team=editDefTeam;
   const CHOICES=['gotcha','react','pass','run','fury'];
   const makeCell=(zone,i)=>{
-    const val=State.defenseCharts?.[zone]?.[i]||{choice:'react',note:''};
+    const val=State.teams?.[team]?.defenseCharts?.[zone]?.[i]||{choice:'react',note:''};
     return `
       <div class="cell">
-        <div class="k">White d6 = ${i}</div>
-        <select data-def-${zone}-${i}-choice class="input">
+        <div class="k">${team==='home'?'Home':'Visitor'} • White d6 = ${i} (${zone} zone)</div>
+        <select data-def-${team}-${zone}-${i}-choice class="input">
           ${CHOICES.map(c=>`<option value="${c}" ${val.choice===c?'selected':''}>${c}</option>`).join('')}
         </select>
-        <div style="margin-top:6px;"><input data-def-${zone}-${i}-note class="input" placeholder="note (optional)" value="${val.note||''}"></div>
+        <div style="margin-top:6px;"><input data-def-${team}-${zone}-${i}-note class="input" placeholder="note (optional)" value="${val.note||''}"></div>
       </div>`;
   };
   $('#def-white').innerHTML=[1,2,3,4,5,6].map(i=>makeCell('white',i)).join('');
   $('#def-red').innerHTML  =[1,2,3,4,5,6].map(i=>makeCell('red',i)).join('');
   ['white','red'].forEach(zone=>{
     [1,2,3,4,5,6].forEach(i=>{
-      $(`select[data-def-${zone}-${i}-choice]`).onchange=e=>{ ensure(State.defenseCharts[zone],i); State.defenseCharts[zone][i].choice=e.target.value; saveState(); if(History[0]) renderResultPanel(History[0]); };
-      $(`input[data-def-${zone}-${i}-note]`).oninput=e=>{ ensure(State.defenseCharts[zone],i); State.defenseCharts[zone][i].note=e.target.value; saveState(); if(History[0]) renderResultPanel(History[0]); };
+      $(`select[data-def-${team}-${zone}-${i}-choice]`).onchange=e=>{
+        ensure(State.teams[team].defenseCharts[zone],i);
+        State.teams[team].defenseCharts[zone][i].choice=e.target.value; saveState();
+      };
+      $(`input[data-def-${team}-${zone}-${i}-note]`).oninput=e=>{
+        ensure(State.teams[team].defenseCharts[zone],i);
+        State.teams[team].defenseCharts[zone][i].note=e.target.value; saveState();
+      };
     });
   });
 }
+
+/* Charts + Fury editors (unchanged except for auto-save) */
 function renderCharts(){
   ['react','fury','pass','run'].forEach(name=>{
     const holder=document.querySelector(`.chart[data-chart="${name}"]`);
@@ -493,8 +557,14 @@ function rollAll(){
   $('#longBreak').textContent = `[${l1}, ${l2}, ${l3}]`;
 
   const furyFace=(State.furyDieFaces&&State.furyDieFaces[furyIdx-1])||["▲","●","●","●","■","■"][furyIdx-1];
-  const off=State.offenseCharts?.[zone]?.[black];
-  const def=State.defenseCharts?.[zone]?.[white];
+
+  // Possession decides which team's dice are used
+  const pos = document.querySelector('input[name="pos"]:checked').value; // 'home'|'away'
+  const offTeam = pos;
+  const defTeam = pos==='home'?'away':'home';
+
+  const off=State.teams?.[offTeam]?.offenseCharts?.[zone]?.[black];
+  const def=State.teams?.[defTeam]?.defenseCharts?.[zone]?.[white];
 
   let route={type:'player',number:d20}, playResult=null;
 
@@ -503,7 +573,7 @@ function rollAll(){
     const defChoice=(def&&def.choice)?def.choice:'react';    // gotcha|react|pass|run|fury
 
     if(defChoice==='gotcha'){
-      // Automatic loss of down — no chart resolution
+      // ALWAYS show LOD message (white/red zone)
       route={type:'gotcha'};
       playResult='Gotcha! Automatic loss of down.';
     } else {
@@ -531,6 +601,7 @@ function rollAll(){
 
   const entry={
     ts:Date.now(), zone, d20, black, white, furyIdx, furyFace,
+    offTeam, defTeam,
     offense:off, defense:def, route, result:playResult, furyEffect,
     shortD6,
     medium2D6: { total: m1+m2, rolls: [m1,m2] },
@@ -560,3 +631,4 @@ window.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
+
