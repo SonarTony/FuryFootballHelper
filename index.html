@@ -64,7 +64,7 @@
     <header>
       <div>
         <h1>Fury Football – Browser Helper</h1>
-        <p class="sub">Defense selects chart on 13–20 (React/Pass/Run/Fury). <b>Gotcha!</b> = automatic loss of down.</p>
+        <p class="sub">13–20: defense selects chart (React/Pass/Run/Fury). <b>Gotcha!</b> = LOD, except when Offense called <b>Audible</b> → use <b>FURY</b> chart.</p>
       </div>
       <div class="controls">
         <button id="btnExport" class="btn outline">Export JSON</button>
@@ -121,7 +121,7 @@
           </div>
 
           <div id="resultPanel" style="margin-top:16px;">
-            <div class="tip">Roll to see results. Defense picks the chart on 13–20; <b>Gotcha!</b> is an automatic loss of down in any zone.</div>
+            <div class="tip">Audible + (React or Fury) resolves to randomly chosen Pass/Run (50/50) — shown next to the offense call.</div>
           </div>
         </div>
       </div>
@@ -210,25 +210,25 @@
 /* =======================
    Persistent State + Defaults
    ======================= */
-const STORAGE_KEY = 'fury-football-helper-v8-html';
+const STORAGE_KEY = 'fury-football-helper-v10-html';
 
 const defaultDieOffense = {
-  white: { 1:{call:"PASS",note:""},2:{call:"PASS",note:""},3:{call:"PASS",note:""},4:{call:"RUN",note:""},5:{call:"RUN",note:""},6:{call:"AUDIBLE",note:""} },
-  red:   { 1:{call:"PASS",note:""},2:{call:"PASS",note:""},3:{call:"RUN",note:""},4:{call:"RUN",note:""},5:{call:"RUN",note:""},6:{call:"AUDIBLE",note:""} }
+  white: { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} },
+  red:   { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} }
 };
 const defaultDieDefense = {
   white: {
-    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"react",note:""},
-    4:{choice:"pass",note:""},    5:{choice:"run",note:""},  6:{choice:"fury",note:""}
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
   },
   red: {
-    1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""}, 3:{choice:"react",note:""},
-    4:{choice:"pass",note:""},    5:{choice:"run",note:""},  6:{choice:"fury",note:""}
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
   }
 };
 
 const defaultData = {
-  meta: { name: "Fury Football Set (Defense picks chart; Gotcha = LOD)", version: 8 },
+  meta: { name: "Fury Football Set (Audible rules + Fury symbol)", version: 10 },
   furyDieFaces: ["▲","●","●","●","■","■"],
   furyEffects: {
     "▲": "Triangle: Momentum surge (offense +1 to next player check)",
@@ -304,6 +304,7 @@ let editOffTeam = 'home';
 let editDefTeam = 'home';
 function $(q){return document.querySelector(q)}
 function $all(q){return Array.from(document.querySelectorAll(q))}
+function pick50(rng){ return rng()<0.5 ? 'pass' : 'run'; }
 
 /* UI */
 function renderAll(){
@@ -332,7 +333,7 @@ function updateTeamBadges(){
 }
 function renderResultPanel(last){
   const panel=$('#resultPanel');
-  if(!last){ panel.innerHTML='<div class="tip">Roll to see results. Defense picks the chart on 13–20; <b>Gotcha!</b> is an automatic loss of down in any zone.</div>'; return; }
+  if(!last){ panel.innerHTML='<div class="tip">Audible + (React or Fury) resolves to a random Pass/Run (50/50).</div>'; return; }
   const zoneLabel=State.zoneNames?.[last.zone]||(last.zone==='red'?'Red Zone':'White Zone');
   const offTeamLbl = last.offTeam==='home'?'Home Offense':'Visitor Offense';
   const defTeamLbl = last.defTeam==='home'?'Home Defense':'Visitor Defense';
@@ -343,9 +344,9 @@ function renderResultPanel(last){
   }else if(last.route.type==='gotcha'){
     routeHTML=`<p><b>Route:</b> <span class="badge">Gotcha! — Automatic loss of down</span></p>`;
   }else if(last.route.type==='chart-single'){
-    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b></p>`;
+    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b>${last.route.gotchaAudible?` <span class="badge">Gotcha! vs Audible → Fury</span>`:''}${last.audibleResolved?` <span class="badge">Audible → ${last.audibleResolved.toUpperCase()}</span>`:''}</p>`;
   }else if(last.route.type==='chart-both'){
-    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} (choose Pass or Run)</p>`;
+    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} (choose Pass or Run)${last.route.gotchaAudible?` <span class="badge">Gotcha! vs Audible → Fury</span>`:''}</p>`;
   }
 
   panel.innerHTML=`
@@ -367,15 +368,16 @@ function renderResultPanel(last){
     <div style="margin-bottom:8px;">${routeHTML}</div>
     <div class="grid grid-3">
       <div class="ibox"><div class="t">Offense Call</div>
-        <div>${last.offense?`<div>Call: <b>${(last.offense.call||'').toUpperCase()}</b></div>${last.offense.note?`<div class="muted" style="font-size:.85rem;">${last.offense.note}</div>`:''}`:'<i>Not set</i>'}</div>
+        <div>
+          ${last.offense?`<div>Call: <b>${(last.offense.call||'').toUpperCase()}</b>${last.audibleResolved?` → <b>${last.audibleResolved.toUpperCase()}</b>`:''}</div>${last.offense.note?`<div class="muted" style="font-size:.85rem;">${last.offense.note}</div>`:''}`:'<i>Not set</i>'}
+        </div>
       </div>
       <div class="ibox"><div class="t">Defense</div>
         <div>${last.defense?`<div>Choice: <b>${(last.defense.choice||'').toUpperCase()}</b></div>${last.defense.note?`<div class="muted" style="font-size:.85rem;">${last.defense.note}</div>`:''}`:'<i>Not set</i>'}</div>
       </div>
-      <div class="ibox"><div class="t">Fury Effect</div><div>${last.furyEffect||'No special effect'}</div></div>
+      <div class="ibox"><div class="t">Fury Effect</div><div><b>${last.furyFace}</b>: ${last.furyEffect||'No special effect'}</div></div>
     </div>
     ${last.result?`<div class="result" style="margin-top:8px;"><div class="t" style="font-weight:700;">Result</div><div>${last.result}</div></div>`:''}
-    <div class="tip" style="margin-top:6px;">Tip: Customize team dice below — everything auto-saves.</div>
   `;
 }
 function renderHistory(){
@@ -386,7 +388,7 @@ function renderHistory(){
       <div class="histRow">
         <span class="badge">${h.offTeam==='home'?'Home':'Visitor'} ball</span>
         <span class="badge">d20 ${h.d20}</span>
-        <span class="badge">Off ${h.black}→${(h.offense?.call||'').toUpperCase()}</span>
+        <span class="badge">Off ${h.black}→${(h.offense?.call||'').toUpperCase()}${h.audibleResolved?`→${h.audibleResolved.toUpperCase()}`:''}</span>
         <span class="badge">Def ${h.white}→${(h.defense?.choice||'').toUpperCase()}</span>
         <span class="badge">Fury ${h.furyFace}</span>
         <span class="badge">Short ${h.shortD6}</span>
@@ -394,6 +396,7 @@ function renderHistory(){
         <span class="badge">Long ${h.long3D6.total}</span>
         <span class="badge">${h.zone}</span>
         ${h.route.type==='gotcha'?'<span class="badge">Gotcha! LOD</span>':''}
+        ${h.route.gotchaAudible?'<span class="badge">Gotcha→Fury</span>':''}
       </div>
       <div class="mono" style="margin:4px 0 4px 0; color:#475569;">
         Medium: [${h.medium2D6.rolls.join(', ')}] • Long: [${h.long3D6.rolls.join(', ')}]
@@ -471,7 +474,7 @@ function renderDefenseGrid(){
   });
 }
 
-/* Charts + Fury editors (unchanged except for auto-save) */
+/* Charts + Fury editors */
 function renderCharts(){
   ['react','fury','pass','run'].forEach(name=>{
     const holder=document.querySelector(`.chart[data-chart="${name}"]`);
@@ -567,32 +570,48 @@ function rollAll(){
   const def=State.teams?.[defTeam]?.defenseCharts?.[zone]?.[white];
 
   let route={type:'player',number:d20}, playResult=null;
+  let audibleResolved = null; // 'pass' | 'run' when needed
 
   if(d20>=13 && d20<=20){
     const offCall=(off&&off.call)?off.call:'run';            // audible|run|pass
-    const defChoice=(def&&def.choice)?def.choice:'react';    // gotcha|react|pass|run|fury
+    const defChoiceRaw=(def&&def.choice)?def.choice:'react'; // gotcha|react|pass|run|fury
 
-    if(defChoice==='gotcha'){
-      // ALWAYS show LOD message (white/red zone)
+    // Gotcha! special case with Audible
+    if(defChoiceRaw==='gotcha' && offCall==='audible'){
+      const chartName='fury';
+      const row = State.playCharts?.[chartName]?.[d20] || {};
+      const passTxt=row.pass||'(no pass entry)';
+      const runTxt =row.run ||'(no run entry)';
+      playResult=`<b>${chartName.toUpperCase()} ${d20}</b> <span class="badge">Gotcha! vs Audible → Fury</span><br>Pass → ${escapeHTML(passTxt)}<br>Run → ${escapeHTML(runTxt)}`;
+      route = { type:'chart-both', chart:chartName, number:d20, gotchaAudible:true };
+    } else if(defChoiceRaw==='gotcha'){
       route={type:'gotcha'};
       playResult='Gotcha! Automatic loss of down.';
     } else {
-      // Defense selects the chart
+      // If Offense called Audible and Defense is React or Fury, choose Pass/Run 50/50
+      let defChoice = defChoiceRaw;
+      let callForChart = offCall;
+      if(offCall==='audible' && (defChoice==='react' || defChoice==='fury')){
+        audibleResolved = pick50(rng); // 'pass' or 'run'
+        callForChart = audibleResolved;
+      }
+
       const chartName = defChoice; // 'react'|'pass'|'run'|'fury'
       const row = State.playCharts?.[chartName]?.[d20] || {};
-      if(offCall==='audible'){
+      if(callForChart==='pass'){
+        const txt=row.pass||`No entry for ${chartName.toUpperCase()} ${d20} PASS.`;
+        playResult=escapeHTML(txt);
+        route = { type:'chart-single', chart:chartName, call:'pass', number:d20 };
+      } else if(callForChart==='run'){
+        const txt=row.run||`No entry for ${chartName.toUpperCase()} ${d20} RUN.`;
+        playResult=escapeHTML(txt);
+        route = { type:'chart-single', chart:chartName, call:'run', number:d20 };
+      } else {
+        // Audible with Defense = Pass/Run (not covered by your rule) → show both, unchanged
         const passTxt=row.pass||'(no pass entry)';
         const runTxt =row.run ||'(no run entry)';
         playResult=`<b>${chartName.toUpperCase()} ${d20}</b><br>Pass → ${escapeHTML(passTxt)}<br>Run → ${escapeHTML(runTxt)}`;
         route = { type:'chart-both', chart:chartName, number:d20 };
-      } else if(offCall==='pass'){
-        const txt=row.pass||`No entry for ${chartName.toUpperCase()} ${d20} PASS.`;
-        playResult=escapeHTML(txt);
-        route = { type:'chart-single', chart:chartName, call:'pass', number:d20 };
-      } else {
-        const txt=row.run||`No entry for ${chartName.toUpperCase()} ${d20} RUN.`;
-        playResult=escapeHTML(txt);
-        route = { type:'chart-single', chart:chartName, call:'run', number:d20 };
       }
     }
   }
@@ -603,6 +622,7 @@ function rollAll(){
     ts:Date.now(), zone, d20, black, white, furyIdx, furyFace,
     offTeam, defTeam,
     offense:off, defense:def, route, result:playResult, furyEffect,
+    audibleResolved, // 'pass' | 'run' | null
     shortD6,
     medium2D6: { total: m1+m2, rolls: [m1,m2] },
     long3D6:   { total: l1+l2+l3, rolls: [l1,l2,l3] }
