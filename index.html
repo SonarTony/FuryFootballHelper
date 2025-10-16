@@ -213,17 +213,17 @@
 const STORAGE_KEY = 'fury-football-helper-v8-html';
 
 const defaultDieOffense = {
-  white: { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} },
-  red:   { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} }
+  white: { 1:{call:"PASS",note:""},2:{call:"PASS",note:""},3:{call:"PASS",note:""},4:{call:"RUN",note:""},5:{call:"RUN",note:""},6:{call:"AUDIBLE",note:""} },
+  red:   { 1:{call:"PASS",note:""},2:{call:"PASS",note:""},3:{call:"RUN",note:""},4:{call:"RUN",note:""},5:{call:"RUN",note:""},6:{call:"AUDIBLE",note:""} }
 };
 const defaultDieDefense = {
   white: {
-    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
-    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"react",note:""},
+    4:{choice:"pass",note:""},    5:{choice:"run",note:""},  6:{choice:"fury",note:""}
   },
   red: {
-    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
-    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+    1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""}, 3:{choice:"react",note:""},
+    4:{choice:"pass",note:""},    5:{choice:"run",note:""},  6:{choice:"fury",note:""}
   }
 };
 
