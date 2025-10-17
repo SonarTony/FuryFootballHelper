@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fury Football – Browser Helper (HTML/JS)</title>
+<style>
+  :root { --panel:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#f8fafc,#eef2f7);color:var(--ink)}
+  .container{max-width:1200px;margin:0 auto;padding:24px}
+  header{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
+  h1{margin:0;font-size:1.6rem}
+  .sub{margin:4px 0 0;color:var(--muted);font-size:.9rem}
+  .row{display:grid;grid-template-columns:1fr;gap:24px}
+  @media(min-width:1024px){.row{grid-template-columns:2fr 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+  .hd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .hd h2{margin:0;font-size:1rem}
+  .bd{padding:16px}
+  .grid{display:grid;gap:12px}
+  .grid-4{grid-template-columns:repeat(4,1fr)}
+  .grid-3{grid-template-columns:repeat(3,1fr)}
+  .grid-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:640px){.grid-4{grid-template-columns:repeat(2,1fr)}}
+  .die{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px}
+  .die .lbl{font-size:.75rem;color:var(--muted)}
+  .die .val{font-size:1.2rem;font-weight:700}
+  .die .sub{font-size:.72rem;color:#9ca3af}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .input,select,textarea{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;font:inherit}
+  .btn{background:#111827;color:#fff;padding:10px 14px;border:0;border-radius:10px;cursor:pointer;font-weight:600}
+  .btn.outline{background:#fff;color:#111827;border:1px solid var(--line)}
+  .badge{display:inline-flex;align-items:center;border:1px solid var(--line);background:#fff;padding:3px 8px;border-radius:999px;font-size:.75rem}
+  .history{max-height:560px;overflow:auto;padding-right:6px}
+  .histItem{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+  .histRow{display:flex;gap:8px;flex-wrap:wrap;font-size:.8rem;color:#334155}
+  .ibox{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+  .ibox .t{font-size:.72rem;color:var(--muted);font-weight:700}
+  .result{border:1px solid var(--line);background:#f8fafc;border-radius:12px;padding:10px}
+  .tabs{display:grid;gap:12px}
+  .tabButtons{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .tabButtons .btn{width:100%;background:#f1f5f9;color:#0f172a}
+  .zoneGrid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:900px){.zoneGrid{grid-template-columns:1fr 1fr}}
+  .zoneCol .ttl{font-size:.9rem;color:#475569;font-weight:700;margin-bottom:8px}
+  .cell{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+  .cell .k{font-size:.72rem;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .muted{color:var(--muted)}
+  .tip{font-size:.75rem;color:#9aa1ad}
+  .rowGap{display:grid;gap:24px}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.86rem}
+  .seg{display:flex;gap:6px;align-items:center;background:#fff;border:1px solid var(--line);padding:4px;border-radius:10px}
+  .seg input{display:none}
+  .seg label{padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.85rem}
+  .seg input:checked + label{background:#111827;color:#fff}
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Fury Football – Browser Helper</h1>
+        <p class="sub">
+          Gotcha! always applies: if Off ≠ Audible → <b>LOD</b>; if Off = Audible → <b>FURY chart</b> with 50/50 Pass/Run.
+          Audible + (React/Fury) → 50/50 Pass/Run (shown next to call). Rules apply even on player checks (d20 1–12).
+        </p>
+      </div>
+      <div class="controls">
+        <button id="btnExport" class="btn outline">Export JSON</button>
+        <label class="btn outline" for="fileImport" style="display:inline-flex;align-items:center;gap:8px;">
+          Import JSON <input id="fileImport" type="file" accept="application/json" style="display:none" />
+        </label>
+      </div>
+    </header>
+
+    <div class="row">
+      <!-- Roller -->
+      <div class="card">
+        <div class="hd">
+          <h2>Dice Roller</h2>
+          <div class="controls" style="flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="muted" style="font-size:.8rem;">Seed</span>
+              <input id="seed" class="input" placeholder="optional" style="width:160px;" />
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="muted" style="font-size:.8rem;">Zone</span>
+              <select id="zone" class="input" style="width:150px;">
+                <option value="white">White Zone</option>
+                <option value="red">Red Zone</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="muted" style="font-size:.8rem;">Possession</span>
+              <div class="seg" id="posseg">
+                <input type="radio" name="pos" id="posHome" value="home" checked><label for="posHome">Home</label>
+                <input type="radio" name="pos" id="posAway" value="away"><label for="posAway">Visitor</label>
+              </div>
+            </div>
+
+            <!-- NEW: Coach selectors (pre-game) -->
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <span class="muted" style="font-size:.8rem;">Home Off Coach</span>
+              <select id="coachHomeOff" class="input" style="width:130px;"></select>
+
+              <span class="muted" style="font-size:.8rem;">Home Def Coach</span>
+              <select id="coachHomeDef" class="input" style="width:130px;"></select>
+
+              <span class="muted" style="font-size:.8rem;">Visitor Off Coach</span>
+              <select id="coachAwayOff" class="input" style="width:130px;"></select>
+
+              <span class="muted" style="font-size:.8rem;">Visitor Def Coach</span>
+              <select id="coachAwayDef" class="input" style="width:130px;"></select>
+            </div>
+          </div>
+        </div>
+        <div class="bd">
+          <div class="grid grid-4">
+            <div class="die"><div class="lbl">d20</div><div class="val">1–20</div></div>
+            <div class="die"><div class="lbl">Black d6 (Off)</div><div class="val">1–6</div><div class="sub" id="offTeamTag">Home Offense</div></div>
+            <div class="die"><div class="lbl">White d6 (Def)</div><div class="val">1–6</div><div class="sub" id="defTeamTag">Visitor Defense</div></div>
+            <div class="die"><div class="lbl">Fury d6</div><div class="val" id="furyFacesPreview">▲ ● ● ● ■ ■</div><div class="sub">customizable</div></div>
+          </div>
+
+          <!-- Extra yardage dice -->
+          <div class="grid grid-3" style="margin-top:12px;">
+            <div class="die"><div class="lbl">Short</div><div class="val" id="shortVal">1d6</div><div class="sub">extra roll</div></div>
+            <div class="die"><div class="lbl">Medium</div><div class="val" id="mediumVal">2d6</div><div class="sub mono" id="mediumBreak"></div></div>
+            <div class="die"><div class="lbl">Long</div><div class="val" id="longVal">3d6</div><div class="sub mono" id="longBreak"></div></div>
+          </div>
+
+          <div class="controls" style="margin-top:12px;">
+            <button id="btnRoll" class="btn">Roll</button>
+            <button id="btnClear" class="btn outline">Clear</button>
+          </div>
+
+          <div id="resultPanel" style="margin-top:16px;">
+            <div class="tip">Rules apply on 1–12 and 13–20. Gotcha + Audible → FURY chart (50/50 pass/run). Gotcha w/o Audible → LOD.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <div class="hd"><h2>Roll History</h2></div>
+        <div class="bd history" id="history"></div>
+      </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="card" style="margin-top:24px;">
+      <div class="hd"><h2>Configuration & Data</h2></div>
+      <div class="bd tabs">
+        <div class="tabButtons">
+          <!-- Editors removed from UI per your request -->
+          <button class="btn" data-tab="charts">Play Charts 13–20</button>
+          <button class="btn" data-tab="fury">Fury Die & Effects</button>
+        </div>
+
+        <!-- Charts -->
+        <div class="tab" id="tab-charts" style="">
+          <div class="rowGap">
+            <div class="chart" data-chart="react"></div>
+            <div class="chart" data-chart="fury"></div>
+            <div class="chart" data-chart="pass"></div>
+            <div class="chart" data-chart="run"></div>
+          </div>
+        </div>
+
+        <!-- Fury -->
+        <div class="tab" id="tab-fury" style="display:none;">
+          <div class="ibox" style="margin-bottom:12px;">
+            <div class="t">Fury Die Faces (6)</div>
+            <div class="grid grid-3" id="furyFacesGrid" style="margin-top:8px;"></div>
+          </div>
+          <div class="grid grid-3" id="furyEffectsGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =======================
+   Persistent State + Defaults
+   ======================= */
+const STORAGE_KEY = 'fury-football-helper-v12-html'; // new key so old localStorage won't override
+
+/* Your original black/white dice defaults (kept exactly) */
+const defaultDieOffense = {
+  white: { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} },
+  red:   { 1:{call:"audible",note:""},2:{call:"audible",note:""},3:{call:"run",note:""},4:{call:"run",note:""},5:{call:"pass",note:""},6:{call:"pass",note:""} }
+};
+const defaultDieDefense = {
+  white: {
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+  },
+  red: {
+    1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""}, 3:{choice:"pass",note:""},
+    4:{choice:"run",note:""},    5:{choice:"fury",note:""},  6:{choice:"react",note:""}
+  }
+};
+
+/* ===== Coach presets (hardcoded). All grades mirror Default until you give specific 1–6 mappings. ===== */
+const COACH_LABELS = ["Default","AAAA","AAA","AA","A","B","C","D","F"];
+
+
+const COACH_PRESETS = {
+  offense: {
+    Default: structuredClone(defaultDieOffense),
+    AAAA: {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"gain",note:""}
+      }
+    },
+   AAA: {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    AA: {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"tendency",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    A:  {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"tendency",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    B:  {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"tendency",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"trend",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    C:  {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"no gain",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"tendency",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    D:  {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"tendency",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"penalized",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    F:  {
+      white: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"turnover",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      },
+      red: {
+        1:{call:"pass",note:""}, 2:{call:"pass",note:""},
+        3:{call:"penalized",note:""},     4:{call:"run",note:""},
+        5:{call:"run",note:""},    6:{call:"audible",note:""}
+      }
+    },
+    },
+  defense: {
+    Default: structuredClone(defaultDieDefense),
+    AAAA: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    AAA: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"no gain",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"turnover",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    AA: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"no gain",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    A: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+   B:  {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gotcha",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    C: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"react",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gain",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    D: {
+      white: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"penalized",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"gain",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+    F: {
+      white: {
+        1:{choice:"gain",note:""}, 2:{choice:"react",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      },
+      red: {
+        1:{choice:"gotcha",note:""}, 2:{choice:"penalized",note:""},
+        3:{choice:"react",note:""},   4:{choice:"pass",note:""},
+        5:{choice:"run",note:""},   6:{choice:"fury",note:""}
+      }
+    },
+  },
+};
+
+
+const defaultData = {
+  meta: {
+    name: "Fury Football Set (Gotcha + Audible rules)",
+    version: 12,
+    coaches: {
+      home: { off: "Default", def: "Default" },
+      away: { off: "Default", def: "Default" }
+    }
+  },
+  furyDieFaces: ["▲","●","●","●","■","■"],
+  furyEffects: {
+    "▲": "Triangle: Momentum surge (offense +1 to next player check)",
+    "●": "Circle: No special effect",
+    "■": "Square: Wild card — consult FURY chart note"
+  },
+  zoneNames: { white: "White Zone", red: "Red Zone" },
+
+  /* Team-specific dice are populated from coach presets at load */
+  teams: {
+    home: { offenseCharts: structuredClone(defaultDieOffense), defenseCharts: structuredClone(defaultDieDefense) },
+    away: { offenseCharts: structuredClone(defaultDieOffense), defenseCharts: structuredClone(defaultDieDefense) }
+  },
+
+  /* ===== YOUR CUSTOM PLAY CHARTS (13–20) — kept EXACTLY as you provided ===== */
+  playCharts: {
+    react: {
+      13:{pass:"Pass: Defensive Player [1]", run:"Run: Defensive Player [4]"},
+      14:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
+      15:{pass:"Pass: Defensive Player [2]", run:"Run: Defensive Player [5]"},
+      16:{pass:"Pass: Defensive Player [3]", run:"Run: Defensive Player [6]"},
+      17:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      18:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      19:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    },
+    fury:  {
+      13:{pass:"Pass: SACK! (-1D6 LOSS)", run:"Run: FUMBLE!"},
+      14:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
+      15:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
+      16:{pass:"Pass: Defensive Player [5]", run:"Run: Defensive Player [2]"},
+      17:{pass:"Pass: LONG GAIN (3D6).", run:"Run: LOSS (-1D6)"},
+      18:{pass:"Pass: SACK (-1D6)", run:"Run: LOSS (-1D6)"},
+      19:{pass:"Pass: FUMBLE", run:"Run: LONG GAIN (3D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Offensive Player [12]"}
+    },
+    pass:  {
+      13:{pass:"Pass: INTERCEPTION!", run:"Run: TOUCHDOWN!"},
+      14:{pass:"Pass: INTERCEPTION!", run:"Run: SHORT GAIN (1D6)"},
+      15:{pass:"Pass: INCOMPLETE!", run:"Run: MEDIUM GAIN (2D6)"},
+      16:{pass:"Pass: INCOMPLETE!", run:"Run: Offensive Player [12]"},
+      17:{pass:"Pass: INTERCEPTION!", run:"Run: LONG GAIN (3D6)"},
+      18:{pass:"Pass: INTERCEPTION!", run:"Run: MEDIUM GAIN (2D6)"},
+      19:{pass:"Pass: INCOMPLETE!", run:"Run: LONG GAIN (3D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    },
+    run:   {
+      13:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
+      14:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LONG GAIN (3D6)"},
+      15:{pass:"Pass: SHORT GAIN (1D6)", run:"Run: NO GAIN."},
+      16:{pass:"Pass: Offensive Player [12]", run:"Run: Defensive Player [5]"},
+      17:{pass:"Pass: LONG GAIN (3D6)", run:"Run: LOSS (-1D6)"},
+      18:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: LOSS (-1D6)"},
+      19:{pass:"Pass: MEDIUM GAIN (2D6)", run:"Run: SHORT GAIN (1D6)"},
+      20:{pass:"Pass: Offensive Player [12]", run:"Run: Offensive Player [12]"}
+    }
+  }
+};
+
+function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); return raw?JSON.parse(raw):structuredClone(defaultData);}catch(e){return structuredClone(defaultData)} }
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(State)); }
+
+/* RNG */
+function mulberry32(a){return function(){var t=(a+=0x6d2b79f5);t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296}}
+function seedToRng(seed){ if(!seed) return Math.random; let s=0; for(let i=0;i<seed.length;i++) s=(s*31+seed.charCodeAt(i))>>>0; return mulberry32(s||1) }
+const rollD=(rng,s)=>Math.floor(rng()*s)+1;
+
+let State = loadState();
+let History = [];
+let currentTab = 'charts';
+function $(q){return document.querySelector(q)}
+function $all(q){return Array.from(document.querySelectorAll(q))}
+function pick50(rng){ return rng()<0.5 ? 'pass' : 'run'; }
+function chartRowFromAnyD20(d20){ return d20>=13 && d20<=20 ? d20 : (13 + (((d20-1) % 8))); } // map 1–12 → 13–20 cyclically
+
+/* UI */
+function renderAll(){
+  $('#furyFacesPreview').textContent=(State.furyDieFaces||[]).join(' ');
+  updateTeamBadges();
+  renderResultPanel(null); renderHistory(); renderCharts(); renderFuryEditors();
+  $all('.tabButtons .btn').forEach(b=>{ b.onclick=()=>switchTab(b.dataset.tab) }); switchTab(currentTab);
+  $all('input[name="pos"]').forEach(r=>r.onchange=updateTeamBadges);
+  $('#shortVal').textContent='1d6'; $('#mediumVal').textContent='2d6'; $('#mediumBreak').textContent=''; $('#longVal').textContent='3d6'; $('#longBreak').textContent='';
+  renderCoachDropdowns();
+}
+function updateTeamBadges(){
+  const pos = document.querySelector('input[name="pos"]:checked').value;
+  const offTeam = pos; const defTeam = pos==='home'?'away':'home';
+  $('#offTeamTag').textContent = (offTeam==='home'?'Home':'Visitor')+' Offense';
+  $('#defTeamTag').textContent = (defTeam==='home'?'Home':'Visitor')+' Defense';
+}
+
+/* Coach selectors */
+function renderCoachDropdowns(){
+  const ids = ['coachHomeOff','coachHomeDef','coachAwayOff','coachAwayDef'];
+  ids.forEach(id=>{
+    const el = $('#'+id);
+    el.innerHTML = COACH_LABELS.map(l=>`<option value="${l}">${l}</option>`).join('');
+  });
+  $('#coachHomeOff').value = State.meta.coaches.home.off;
+  $('#coachHomeDef').value = State.meta.coaches.home.def;
+  $('#coachAwayOff').value = State.meta.coaches.away.off;
+  $('#coachAwayDef').value = State.meta.coaches.away.def;
+
+  $('#coachHomeOff').onchange = e=>applyCoach('home','off',e.target.value);
+  $('#coachHomeDef').onchange = e=>applyCoach('home','def',e.target.value);
+  $('#coachAwayOff').onchange = e=>applyCoach('away','off',e.target.value);
+  $('#coachAwayDef').onchange = e=>applyCoach('away','def',e.target.value);
+}
+function applyCoach(team, kind, label){
+  // kind: 'off' or 'def'
+  State.meta.coaches[team][kind] = label;
+  if(kind==='off'){
+    State.teams[team].offenseCharts = structuredClone(COACH_PRESETS.offense[label]);
+  }else{
+    State.teams[team].defenseCharts = structuredClone(COACH_PRESETS.defense[label]);
+  }
+  saveState();
+}
+
+/* Result + History */
+function renderResultPanel(last){
+  const panel=$('#resultPanel');
+  if(!last){ panel.innerHTML='<div class="tip">Gotcha applies on all d20. Audible resolution applies even on player checks.</div>'; return; }
+  const zoneLabel=State.zoneNames?.[last.zone]||(last.zone==='red'?'Red Zone':'White Zone');
+  const offTeamLbl = last.offTeam==='home'?'Home Offense':'Visitor Offense';
+  const defTeamLbl = last.defTeam==='home'?'Home Defense':'Visitor Defense';
+
+  let routeHTML='';
+  if(last.route.type==='player'){
+    routeHTML=`<p><b>Route:</b> Player Card Check — use d20=${last.route.number}${last.audibleResolved?` (<b>Audible → ${last.audibleResolved.toUpperCase()}</b>)`:''}.</p>`;
+  }else if(last.route.type==='gotcha'){
+    routeHTML=`<p><b>Route:</b> <span class="badge">Gotcha! — Automatic loss of down</span></p>`;
+  }else if(last.route.type==='chart-single'){
+    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b>${last.route.gotchaAudible?` <span class="badge">Gotcha! vs Audible → Fury</span>`:''}${last.audibleResolved?` <span class="badge">Audible → ${last.audibleResolved.toUpperCase()}</span>`:''}</p>`;
+  }else if(last.route.type==='chart-both'){
+    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} (choose Pass or Run)${last.route.gotchaAudible?` <span class="badge">Gotcha! vs Audible → Fury</span>`:''}</p>`;
+  }
+
+  panel.innerHTML=`
+    <div class="grid grid-4" style="gap:8px;margin-bottom:8px;">
+      <span class="badge">Zone: ${zoneLabel}</span>
+      <span class="badge">Possession: ${(last.offTeam==='home'?'Home':'Visitor')}</span>
+      <span class="badge">d20: ${last.d20}</span>
+      <span class="badge">Off die (${offTeamLbl}): ${last.black} → ${(last.offense?.call||'?').toUpperCase()}${last.audibleResolved?`→${last.audibleResolved.toUpperCase()}`:''}</span>
+      <span class="badge">Def die (${defTeamLbl}): ${last.white} → ${(last.defense?.choice||'?').toUpperCase()}</span>
+      <span class="badge">Fury: ${last.furyFace}</span>
+      <span class="badge">Short: ${last.shortD6}</span>
+      <span class="badge">Medium: ${last.medium2D6.total}</span>
+      <span class="badge">Long: ${last.long3D6.total}</span>
+    </div>
+    <div class="mono" style="margin:-6px 0 8px 0; color:#475569;">
+      <span>Medium rolls: [${last.medium2D6.rolls.join(', ')}]</span> •
+      <span>Long rolls: [${last.long3D6.rolls.join(', ')}]</span>
+    </div>
+    <div style="margin-bottom:8px;">${routeHTML}</div>
+    <div class="grid grid-3">
+      <div class="ibox"><div class="t">Offense Call</div>
+        <div>
+          ${last.offense?`<div>Call: <b>${(last.offense.call||'').toUpperCase()}</b>${last.audibleResolved?` → <b>${last.audibleResolved.toUpperCase()}</b>`:''}</div>${last.offense.note?`<div class="muted" style="font-size:.85rem;">${last.offense.note}</div>`:''}`:'<i>Not set</i>'}
+        </div>
+      </div>
+      <div class="ibox"><div class="t">Defense</div>
+        <div>${last.defense?`<div>Choice: <b>${(last.defense.choice||'').toUpperCase()}</b></div>${last.defense.note?`<div class="muted" style="font-size:.85rem;">${last.defense.note}</div>`:''}`:'<i>Not set</i>'}</div>
+      </div>
+      <div class="ibox"><div class="t">Fury Effect</div><div><b>${last.furyFace}</b>: ${last.furyEffect||'No special effect'}</div></div>
+    </div>
+    ${last.result?`<div class="result" style="margin-top:8px;"><div class="t" style="font-weight:700;">Result</div><div>${last.result}</div></div>`:''}
+  `;
+}
+function renderHistory(){
+  const box=$('#history');
+  if(!History.length){ box.innerHTML=`<div class="muted" style="font-size:.9rem;">No rolls yet.</div>`; return; }
+  box.innerHTML=History.map(h=>`
+    <div class="histItem">
+      <div class="histRow">
+        <span class="badge">${h.offTeam==='home'?'Home':'Visitor'} ball</span>
+        <span class="badge">d20 ${h.d20}</span>
+        <span class="badge">Off ${h.black}→${(h.offense?.call||'').toUpperCase()}${h.audibleResolved?`→${h.audibleResolved.toUpperCase()}`:''}</span>
+        <span class="badge">Def ${h.white}→${(h.defense?.choice||'').toUpperCase()}</span>
+        <span class="badge">Fury ${h.furyFace}</span>
+        <span class="badge">Short ${h.shortD6}</span>
+        <span class="badge">Medium ${h.medium2D6.total}</span>
+        <span class="badge">Long ${h.long3D6.total}</span>
+        <span class="badge">${h.zone}</span>
+        ${h.route.type==='gotcha'?'<span class="badge">Gotcha! LOD</span>':''}
+        ${h.route.gotchaAudible?'<span class="badge">Gotcha→Fury</span>':''}
+      </div>
+      <div class="mono" style="margin:4px 0 4px 0; color:#475569;">
+        Medium: [${h.medium2D6.rolls.join(', ')}] • Long: [${h.long3D6.rolls.join(', ')}]
+      </div>
+      <div style="font-size:.9rem;">
+        ${
+          h.route.type==='player' ? 'Player card check.'
+          : h.route.type==='gotcha' ? 'Loss of down.'
+          : h.route.type==='chart-single' ? `${h.route.chart.toUpperCase()} #${h.route.number} ${h.route.call.toUpperCase()}`
+          : `${h.route.chart.toUpperCase()} #${h.route.number} (Pick Pass/Run)`
+        }
+      </div>
+      ${h.result?`<div class="tip" style="margin-top:4px;">${h.result}</div>`:''}
+    </div>
+  `).join('');
+}
+
+/* Charts & Fury editors (unchanged UI) */
+function renderCharts(){
+  const host = document.getElementById('tab-charts');
+  host.querySelectorAll('.chart').forEach(div=>{
+    const name = div.dataset.chart;
+    const rows = State.playCharts?.[name] || {};
+    div.innerHTML = `
+      <div class="cell">
+        <div class="k" style="margin-bottom:6px;">${name.toUpperCase()} Chart (13–20)</div>
+        <table class="chartTable" style="width:100%;">
+          <thead><tr><th style="width:64px;">#</th><th>Pass</th><th>Run</th></tr></thead>
+          <tbody>
+            ${[13,14,15,16,17,18,19,20].map(n=>`
+              <tr>
+                <td class="mono">${n}</td>
+                <td class="mono">${escapeHTML(rows[n]?.pass || '')}</td>
+                <td class="mono">${escapeHTML(rows[n]?.run || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+}
+function renderFuryEditors(){
+  const facesGrid = $('#furyFacesGrid');
+  facesGrid.innerHTML = (State.furyDieFaces||[]).map((f,i)=>`
+    <div class="cell">
+      <div class="k">Face ${i+1}</div>
+      <input class="input" value="${escapeHTML(f)}" data-fury-face="${i}">
+    </div>
+  `).join('');
+  (State.furyDieFaces||[]).forEach((_,i)=>{
+    $(`input[data-fury-face="${i}"]`).oninput=e=>{
+      State.furyDieFaces[i] = e.target.value;
+      saveState();
+      $('#furyFacesPreview').textContent=(State.furyDieFaces||[]).join(' ');
+    }
+  });
+
+  const effGrid = $('#furyEffectsGrid');
+  const uniq = Array.from(new Set(State.furyDieFaces));
+  effGrid.innerHTML = uniq.map(sym=>`
+    <div class="cell">
+      <div class="k">Effect for ${escapeHTML(sym||'(blank)')}</div>
+      <textarea class="input" rows="3" data-fury-eff="${escapeHTML(sym)}">${escapeHTML(State.furyEffects?.[sym]||'')}</textarea>
+    </div>
+  `).join('');
+  uniq.forEach(sym=>{
+    $(`textarea[data-fury-eff="${CSS.escape(sym)}"]`).oninput=e=>{
+      State.furyEffects[sym] = e.target.value;
+      saveState();
+    }
+  });
+}
+
+/* Tabs & helpers */
+function switchTab(name){
+  currentTab=name;
+  $('#tab-charts').style.display =(name==='charts')?'':'none';
+  $('#tab-fury').style.display   =(name==='fury')?'':'none';
+}
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
+/* === Rolling Logic (kept) === */
+function rollAll(){
+  const zone=$('#zone').value;
+  const rng=seedToRng($('#seed').value.trim());
+  const d20=rollD(rng,20), black=rollD(rng,6), white=rollD(rng,6), furyIdx=rollD(rng,6);
+
+  // Extra dice
+  const shortD6 = rollD(rng,6);
+  const m1 = rollD(rng,6), m2 = rollD(rng,6);
+  const l1 = rollD(rng,6), l2 = rollD(rng,6), l3 = rollD(rng,6);
+
+  // Update previews
+  $('#shortVal').textContent = shortD6;
+  $('#mediumVal').textContent = (m1+m2);
+  $('#mediumBreak').textContent = `[${m1}, ${m2}]`;
+  $('#longVal').textContent = (l1+l2+l3);
+  $('#longBreak').textContent = `[${l1}, ${l2}, ${l3}]`;
+
+  const furyFace=(State.furyDieFaces&&State.furyDieFaces[furyIdx-1])||["▲","●","●","●","■","■"][furyIdx-1];
+
+  // Possession decides which team's dice are used
+  const pos = document.querySelector('input[name="pos"]:checked').value; // 'home'|'away'
+  const offTeam = pos;
+  const defTeam = pos==='home'?'away':'home';
+
+  const off=State.teams?.[offTeam]?.offenseCharts?.[zone]?.[black];
+  const def=State.teams?.[defTeam]?.defenseCharts?.[zone]?.[white];
+
+  let playResult=null;
+  let route=null;
+  let audibleResolved = null;
+
+  const offCall=(off&&off.call)?off.call:'run';            // audible|run|pass
+  const defChoiceRaw=(def&&def.choice)?def.choice:'react'; // gotcha|react|pass|run|fury
+
+  // Gotcha + NOT Audible => LOD
+  if(defChoiceRaw==='gotcha' && offCall!=='audible'){
+    route = {type:'gotcha'};
+    playResult = 'Gotcha! Automatic loss of down.';
+  }
+  // Gotcha + Audible => FURY chart + auto Pass/Run (50/50)
+  else if(defChoiceRaw==='gotcha' && offCall==='audible'){
+    const rowNum = chartRowFromAnyD20(d20);
+    const row = State.playCharts?.fury?.[rowNum] || {};
+    audibleResolved = pick50(rng);
+    const txt = (audibleResolved==='pass' ? row.pass : row.run) || `No entry for FURY ${rowNum} ${audibleResolved.toUpperCase()}.`;
+    playResult = escapeHTML(txt);
+    route = { type:'chart-single', chart:'fury', call:audibleResolved, number:rowNum, gotchaAudible:true };
+  }
+  // Normal resolution (Audible + React/Fury still chooses 50/50 for display)
+  else {
+    if(d20>=13 && d20<=20){
+      let defChoice = defChoiceRaw;
+      let callForChart = offCall;
+      if(offCall==='audible' && (defChoice==='react' || defChoice==='fury')){
+        audibleResolved = pick50(rng);
+        callForChart = audibleResolved;
+      }
+      const chartName = defChoice; // react|pass|run|fury
+      const row = State.playCharts?.[chartName]?.[d20] || {};
+      if(callForChart==='pass'){
+        playResult = escapeHTML(row.pass || `No entry for ${chartName.toUpperCase()} ${d20} PASS.`);
+        route = { type:'chart-single', chart:chartName, call:'pass', number:d20 };
+      }else if(callForChart==='run'){
+        playResult = escapeHTML(row.run || `No entry for ${chartName.toUpperCase()} ${d20} RUN.`);
+        route = { type:'chart-single', chart:chartName, call:'run', number:d20 };
+      }else{
+        const passTxt=row.pass||'(no pass entry)';
+        const runTxt =row.run ||'(no run entry)';
+        playResult=`<b>${chartName.toUpperCase()} ${d20}</b><br>Pass → ${escapeHTML(passTxt)}<br>Run → ${escapeHTML(runTxt)}`;
+        route = { type:'chart-both', chart:chartName, number:d20 };
+      }
+    } else {
+      if(offCall==='audible' && (defChoiceRaw==='react' || defChoiceRaw==='fury')){
+        audibleResolved = pick50(rng);
+      }
+      route = { type:'player', number:d20 };
+      playResult = null;
+    }
+  }
+
+  const furyEffect=(State.furyEffects&&State.furyEffects[furyFace])||'No special effect';
+
+  const entry={
+    ts:Date.now(), zone, d20, black, white, furyIdx, furyFace,
+    offTeam, defTeam,
+    offense:off, defense:def, route, result:playResult, furyEffect,
+    audibleResolved,
+    shortD6,
+    medium2D6: { total: m1+m2, rolls: [m1,m2] },
+    long3D6:   { total: l1+l2+l3, rolls: [l1,l2,l3] }
+  };
+  History.unshift(entry); History=History.slice(0,60);
+  renderResultPanel(entry); renderHistory();
+}
+
+/* Import / Export */
+function exportJSON(){ const blob=new Blob([JSON.stringify(State,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; const name=(State.meta&&State.meta.name)?State.meta.name.replace(/\s+/g,'-'):'dataset'; a.download=`fury-football-${name}.json`; a.click(); URL.revokeObjectURL(url); }
+function importJSON(file){ const r=new FileReader(); r.onload=e=>{ try{ const obj=JSON.parse(e.target.result); State=Object.assign(structuredClone(defaultData),obj); saveState(); renderAll(); }catch(_){ alert('Invalid JSON file.'); } }; r.readAsText(file); }
+
+/* Wire Up */
+window.addEventListener('DOMContentLoaded', ()=>{
+  // Initialize coaches from presets (ensures teams reflect saved selection)
+  applyCoach('home','off',State.meta.coaches.home.off);
+  applyCoach('home','def',State.meta.coaches.home.def);
+  applyCoach('away','off',State.meta.coaches.away.off);
+  applyCoach('away','def',State.meta.coaches.away.def);
+
+  renderAll();
+  $('#btnRoll').onclick=rollAll;
+  $('#btnClear').onclick=()=>{History=[];renderHistory();renderResultPanel(null);
+    $('#shortVal').textContent='1d6';
+    $('#mediumVal').textContent='2d6'; $('#mediumBreak').textContent='';
+    $('#longVal').textContent='3d6'; $('#longBreak').textContent='';
+  };
+  $('#btnExport').onclick=exportJSON;
+  $('#fileImport').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) importJSON(f); e.target.value=''; };
+});
+</script>
+</body>
+</html>
