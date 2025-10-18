@@ -45,6 +45,7 @@
   .coachRow{display:flex;flex-wrap:wrap;gap:10px}
   .coachBlock{border:1px solid var(--line);padding:8px;border-radius:10px;background:#fff}
   .coachBlock .lbl{font-size:.72rem;color:var(--muted);margin-bottom:4px}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.86rem}
 </style>
 </head>
 <body>
@@ -53,9 +54,9 @@
       <div>
         <h1>Fury Football – Browser Helper</h1>
         <p class="sub">
-          <b>Charts are locked to your originals (React/Fury/Pass/Run 13–20).</b> Gotcha applies on all d20.
-          If Off ≠ Audible → <b>LOD</b>. If Off = Audible vs Gotcha → <b>FURY chart</b> using <b>tendency</b>.
-          Audible always resolves to <b>tendency</b> (counts pass/run in that coach+zone). Rules also apply on player checks (1–12).
+          <b>Charts are locked to your originals (React/Fury/Pass/Run 13–20).</b>
+          Gotcha now means the defense **guessed the play**. If Off ≠ Audible → resolve the
+          <b>Pass</b> or <b>Run</b> chart matching the offense call (for d20 13–20). If Off = Audible vs Gotcha → <b>FURY chart</b> by tendency.
         </p>
       </div>
       <div class="controls">
@@ -137,7 +138,7 @@
           </div>
 
           <div id="resultPanel" style="margin-top:16px;">
-            <div class="sub">Gotcha always applies. Audible → tendency. Gotcha + Audible → FURY (tendency). Charts below are your originals.</div>
+            <div class="sub">Gotcha = defense guessed the play. If offense is Audible vs Gotcha → FURY (by tendency). Otherwise, resolve the chart that matches the offense call.</div>
           </div>
         </div>
       </div>
@@ -164,10 +165,9 @@
 
 <script>
 /* =======================
-   Persistent State + Defaults
+   Persistent State + Defaults (with migration)
    ======================= */
 const STORAGE_KEY = 'fury-football-helper-v12-html';
-
 function structuredClone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
 const defaultDieOffense = {
@@ -185,7 +185,7 @@ const defaultDieDefense = {
   }
 };
 
-/* === YOUR EXACT COACH_PRESETS (verbatim) === */
+/* === COACH_PRESETS (verbatim as you provided) === */
 const COACH_PRESETS = {
   offense: {
     Default: structuredClone(defaultDieOffense),
@@ -387,7 +387,7 @@ const COACH_PRESETS = {
   },
 };
 
-/* ===== YOUR CUSTOM PLAY CHARTS (13–20) – EXACTLY AS YOU PROVIDED BEFORE ===== */
+/* ===== PLAY CHARTS (13–20) – EXACTLY AS YOU PROVIDED ===== */
 const PLAY_CHARTS = {
   react: {
     13:{pass:"Pass: Defensive Player [1]", run:"Run: Defensive Player [4]"},
@@ -436,22 +436,33 @@ const defaultData = {
   furyDieFaces: ["▲","●","●","●","■","■"],
   furyEffects: { "▲":"Triangle effect", "●":"No special", "■":"Fury note" },
   zoneNames: { white: "White Zone", red: "Red Zone" },
-
-  // Selected coaches (per team)
-  coaches: {
-    homeOff: "Default",
-    homeDef: "Default",
-    awayOff: "Default",
-    awayDef: "Default"
-  }
+  coaches: { homeOff:"Default", homeDef:"Default", awayOff:"Default", awayDef:"Default" }
 };
 
 function loadState(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
-    return raw?JSON.parse(raw):structuredClone(defaultData);
-  }catch(e){ return structuredClone(defaultData); }
+    const parsed = raw ? JSON.parse(raw) : structuredClone(defaultData);
+    return migrateState(parsed);
+  }catch(e){
+    return structuredClone(defaultData);
+  }
 }
+
+function migrateState(s){
+  if (!s || typeof s !== 'object') s = {};
+  if (!s.meta) s.meta = structuredClone(defaultData.meta);
+  if (!Array.isArray(s.furyDieFaces)) s.furyDieFaces = structuredClone(defaultData.furyDieFaces);
+  if (!s.furyEffects || typeof s.furyEffects !== 'object') s.furyEffects = structuredClone(defaultData.furyEffects);
+  if (!s.zoneNames || typeof s.zoneNames !== 'object') s.zoneNames = structuredClone(defaultData.zoneNames);
+  if (!s.coaches || typeof s.coaches !== 'object') s.coaches = structuredClone(defaultData.coaches);
+  s.coaches.homeOff ??= "Default";
+  s.coaches.homeDef ??= "Default";
+  s.coaches.awayOff ??= "Default";
+  s.coaches.awayDef ??= "Default";
+  return s;
+}
+
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(State)); }
 
 /* RNG */
@@ -487,7 +498,8 @@ function updateTeamBadges(){
 
 /* === Renderers === */
 function renderAll(){
-  // fury faces grid
+  State = migrateState(State);
+
   $('#furyFacesPreview').textContent=(State.furyDieFaces||[]).join(' ');
   const facesGrid=$('#furyFacesGrid'); facesGrid.innerHTML='';
   (State.furyDieFaces||[]).forEach((f,i)=>{
@@ -495,27 +507,26 @@ function renderAll(){
     inp.oninput=()=>{ State.furyDieFaces[i]=inp.value; saveState(); $('#furyFacesPreview').textContent=State.furyDieFaces.join(' '); };
     facesGrid.appendChild(inp);
   });
-  // fury effects grid
   const effGrid=$('#furyEffectsGrid'); effGrid.innerHTML='';
   Array.from(new Set(State.furyDieFaces)).forEach(sym=>{
     const wrap=document.createElement('div'); wrap.className='ibox';
     wrap.innerHTML = `<div class="t">Effect for <b>${sym}</b></div>`;
-    const ta=document.createElement('textarea'); ta.className='input'; ta.value=State.furyEffects[sym]||'';
+    const ta=document.createElement('textarea'); ta.className='input'; ta.value=State.furyEffects?.[sym]||'';
     ta.oninput=()=>{ State.furyEffects[sym]=ta.value; saveState(); };
     wrap.appendChild(ta); effGrid.appendChild(wrap);
   });
 
-  // coach dropdowns
   const offKeys=Object.keys(COACH_PRESETS.offense);
   const defKeys=Object.keys(COACH_PRESETS.defense);
   function fillSelect(sel, keys, val){
     sel.innerHTML = keys.map(k=>`<option value="${k}">${k}</option>`).join('');
-    sel.value = val && keys.includes(val) ? val : keys[0];
+    sel.value = (val && keys.includes(val)) ? val : keys[0];
   }
-  fillSelect($('#selHomeOff'), offKeys, State.coaches.homeOff);
-  fillSelect($('#selHomeDef'), defKeys, State.coaches.homeDef);
-  fillSelect($('#selAwayOff'), offKeys, State.coaches.awayOff);
-  fillSelect($('#selAwayDef'), defKeys, State.coaches.awayDef);
+  const c = State.coaches || {};
+  fillSelect($('#selHomeOff'), offKeys, c.homeOff || "Default");
+  fillSelect($('#selHomeDef'), defKeys, c.homeDef || "Default");
+  fillSelect($('#selAwayOff'), offKeys, c.awayOff || "Default");
+  fillSelect($('#selAwayDef'), defKeys, c.awayDef || "Default");
 
   $('#selHomeOff').onchange = e=>{ State.coaches.homeOff=e.target.value; saveState(); };
   $('#selHomeDef').onchange = e=>{ State.coaches.homeDef=e.target.value; saveState(); };
@@ -539,11 +550,9 @@ function renderResultPanel(last){
 
   let routeHTML='';
   if(last.route.type==='player'){
-    routeHTML=`<p><b>Route:</b> Player Card Check — use d20=${last.route.number}${last.audibleResolved?` (<b>Audible → ${last.audibleResolved.toUpperCase()}</b>)`:''}.</p>`;
-  }else if(last.route.type==='gotcha'){
-    routeHTML=`<p><b>Route:</b> <span class="badge">Gotcha! — Automatic loss of down</span></p>`;
+    routeHTML=`<p><b>Route:</b> Player Card Check — use d20=${last.route.number}${last.audibleResolved?` (<b>Audible → ${last.audibleResolved.toUpperCase()}</b>)`:''}${last.route.gotchaMatched?` <span class="badge">Gotcha (guessed right)</span>`:''}.</p>`;
   }else{
-    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b>${last.route.gotchaAudible?` <span class="badge">Gotcha! vs Audible → Fury</span>`:''}${last.audibleResolved?` <span class="badge">Audible → ${last.audibleResolved.toUpperCase()}</span>`:''}</p>`;
+    routeHTML=`<p><b>Route:</b> <b>${last.route.chart.toUpperCase()}</b> • #${last.route.number} • <b>${last.route.call.toUpperCase()}</b>${last.route.gotchaAudible?` <span class="badge">Gotcha vs Audible → Fury</span>`:''}${last.route.gotchaMatched?` <span class="badge">Gotcha (guessed right)</span>`:''}${last.audibleResolved?` <span class="badge">Audible → ${last.audibleResolved.toUpperCase()}</span>`:''}</p>`;
   }
 
   panel.innerHTML=`
@@ -592,7 +601,7 @@ function renderHistory(){
         <span class="badge">Medium ${h.medium2D6.total}</span>
         <span class="badge">Long ${h.long3D6.total}</span>
         <span class="badge">${h.zone}</span>
-        ${h.route.type==='gotcha'?'<span class="badge">Gotcha! LOD</span>':''}
+        ${h.route.gotchaMatched?'<span class="badge">Gotcha (guessed right)</span>':''}
         ${h.route.gotchaAudible?'<span class="badge">Gotcha→Fury</span>':''}
       </div>
       <div class="mono" style="margin:4px 0 4px 0; color:#475569;">
@@ -601,7 +610,6 @@ function renderHistory(){
       <div style="font-size:.9rem;">
         ${
           h.route.type==='player' ? 'Player card check.'
-          : h.route.type==='gotcha' ? 'Loss of down.'
           : `${h.route.chart.toUpperCase()} #${h.route.number} ${h.route.call.toUpperCase()}`
         }
       </div>
@@ -610,7 +618,7 @@ function renderHistory(){
   `).join('');
 }
 
-/* === Rolling Logic === */
+/* === Rolling Logic (updated Gotcha behavior) === */
 function rollAll(){
   const zone=$('#zone').value;
   const rng=seedToRng($('#seed').value.trim());
@@ -651,39 +659,47 @@ function rollAll(){
   const offCallRaw=(off&&off.call)?off.call:'run';
   const defChoiceRaw=(def&&def.choice)?def.choice:'react';
 
-  // Normalize offense (audible + any unknown tokens -> tendency)
+  // Normalize offense (audible + unknown tokens -> tendency)
   const normalizedOffCall = (()=>{
     const c = (offCallRaw||'').toLowerCase();
     if (c==='pass' || c==='run') return c;
-    return pickTendency(offMap, zone); // audible, gain, trend, no gain, penalized, turnover -> tendency
+    return pickTendency(offMap, zone);
   })();
 
-  // Gotcha logic applies always
   const defChoice = defenseToChart(defChoiceRaw);
 
-  if(defChoice==='gotcha' && (offCallRaw||'').toLowerCase()!=='audible'){
-    route = {type:'gotcha'};
-    playResult = 'Gotcha! Automatic loss of down.';
-  } else if (defChoice==='gotcha' && (offCallRaw||'').toLowerCase()==='audible'){
-    // Audible vs Gotcha => FURY chart with tendency
+  if(defChoice==='gotcha' && (offCallRaw||'').toLowerCase()==='audible'){
+    // Gotcha + Audible => FURY chart with tendency
     const rowNum = (d20>=13 && d20<=20) ? d20 : (13 + ((d20-1)%8));
     const row = PLAY_CHARTS.fury[rowNum] || {};
-    audibleResolved = normalizedOffCall;
+    audibleResolved = normalizedOffCall; // tendency
     const txt = (audibleResolved==='pass' ? row.pass : row.run) || `No entry for FURY ${rowNum} ${audibleResolved.toUpperCase()}.`;
     playResult = escapeHTML(txt);
     route = { type:'chart', chart:'fury', call:audibleResolved, number:rowNum, gotchaAudible:true };
+  } else if (defChoice==='gotcha'){
+    // Gotcha (guessed correctly): use the chart that matches the OFFENSE CALL (pass/run) when d20 in 13–20
+    if (d20>=13 && d20<=20){
+      const chartName = normalizedOffCall; // 'pass' or 'run'
+      const row = PLAY_CHARTS[chartName]?.[d20] || {};
+      const txt = (normalizedOffCall==='pass' ? row.pass : row.run) || `No entry for ${chartName.toUpperCase()} ${d20} ${normalizedOffCall.toUpperCase()}.`;
+      playResult = escapeHTML(txt);
+      route = { type:'chart', chart:chartName, call:normalizedOffCall, number:d20, gotchaMatched:true };
+    } else {
+      // For 1–12 keep player check; annotate that defense guessed correctly
+      route = { type:'player', number:d20, gotchaMatched:true };
+      playResult = null;
+    }
   } else {
-    // Normal resolution
+    // Normal resolution: defense selects which chart to use (react/pass/run/fury)
     if(d20>=13 && d20<=20){
-      const chartName = defChoice; // react|pass|run|fury
+      const chartName = defChoice; // react | pass | run | fury
       const row = PLAY_CHARTS[chartName]?.[d20] || {};
       const txt = (normalizedOffCall==='pass' ? row.pass : row.run) || `No entry for ${chartName.toUpperCase()} ${d20} ${normalizedOffCall.toUpperCase()}.`;
       playResult = escapeHTML(txt);
       route = { type:'chart', chart:chartName, call:normalizedOffCall, number:d20 };
     } else {
-      // 1–12: player card check; still note audible resolution if any (for display)
       if ((offCallRaw||'').toLowerCase()==='audible'){
-        audibleResolved = normalizedOffCall;
+        audibleResolved = normalizedOffCall; // show tendency outcome chosen
       }
       route = { type:'player', number:d20 };
       playResult = null;
@@ -705,7 +721,7 @@ function rollAll(){
   renderResultPanel(entry); renderHistory();
 }
 
-/* Import / Export */
+/* Import / Export (merge + migrate to avoid crashes) */
 function exportJSON(){
   const data = { meta: State.meta, furyDieFaces: State.furyDieFaces, furyEffects: State.furyEffects, zoneNames: State.zoneNames, coaches: State.coaches };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -718,12 +734,11 @@ function importJSON(file){
   r.onload=e=>{
     try{
       const obj=JSON.parse(e.target.result);
-      // Only import non-chart items to avoid accidental chart changes
-      State.meta = obj.meta || State.meta;
-      State.furyDieFaces = obj.furyDieFaces || State.furyDieFaces;
-      State.furyEffects = obj.furyEffects || State.furyEffects;
-      State.zoneNames = obj.zoneNames || State.zoneNames;
-      State.coaches = obj.coaches || State.coaches;
+      State = migrateState({
+        ...State,
+        ...obj,
+        coaches: { ...(State.coaches||{}), ...(obj.coaches||{}) }
+      });
       saveState(); renderAll();
     }catch(_){ alert('Invalid JSON file.'); }
   };
